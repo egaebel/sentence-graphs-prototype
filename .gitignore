@@ -1,6 +1,9 @@
+*.pyc
 /bin/
 /include/
 /lib/
 /local/
 /share/
 /pip-selfcheck.json
+src/data/enwiki-latest-all-titles-in-ns0
+scrapy-scrape-test*.json
