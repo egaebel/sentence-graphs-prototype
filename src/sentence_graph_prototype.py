@@ -2,6 +2,8 @@ from aylienapiclient import textapi
 
 from graph_tool.all import Graph
 from graph_tool.all import graph_draw
+from graph_tool.all import load_graph
+from graph_tool import topology
 
 import scrapy
 
@@ -342,6 +344,7 @@ def build_deep_sentence_graph(
         definition_provider,
         directed,
         depth=depth)
+
     print("Setting base sentence coloring.....")
     for word_vertex in first_sentence_vertices:
         print("Processing word_vertex: %s" % 
@@ -349,12 +352,6 @@ def build_deep_sentence_graph(
         sentence_graph.vertex_properties["vertex_color"][word_vertex] =\
             [1, 0, 0, 1]
 
-    print("Outputting ALL word vertex colors....")
-    for word_vertex in sentence_graph.vertices():
-        print("word_vertex word: %s" % 
-            sentence_graph.vertex_properties["word"][word_vertex])
-        print("word_vertex color: %s" % 
-            sentence_graph.vertex_properties["vertex_color"][word_vertex])
     return sentence_graph
 
 def _build_deep_sentence_graph_helper(
@@ -374,6 +371,11 @@ def _build_deep_sentence_graph_helper(
     sentence_vertices = []
     # Parse with ParseyMcParseface to obtain parts of speech tagging
     sentence_parse_tree = parse_ascii_tree(run_parsey(sentence))
+    if sentence_parse_tree is None:
+        print(
+            "\n\nERROR: sentence_parse_tree from parse_ascii_tree is None for"
+            " sentence:\n %s\n\n" % sentence)
+        return []
 
     prev_word_vertex = None
     for parse_node in sentence_parse_tree.to_sentence_order():
@@ -422,6 +424,9 @@ def _build_deep_sentence_graph_helper(
                         word_vertex, definition_word_vertex)
                     sentence_graph.edge_properties["definition_edge"][definition_edge] =\
                         definition_edge
+            else:
+                print("\n\nERROR: definition not found for:\nword: %s\n"
+                    "part of speech:%s\n\n\n" % (word, part_of_speech))
 
 
         sentence_vertices.append(word_vertex)
@@ -457,21 +462,50 @@ def generate_linear_sentence_graph(sentence, directed=False):
 def sentence_graph_draw(
         sentence_graph, 
         sentence,
+        output_folder_name="sentence-graphs-visualization",
         output_file_name="sentence-graph-debug.png"):
-    sentence_dict = {}
-    vertex_fill_colors = []
-    for word in sentence:
-        sentence_dict[word] = True
-    for v in sentence_graph.vertices():
-        if v in sentence_dict:
-            vertex_fill_colors.append()
+    base_vertex_font_size = 128
+    base_vertex_size = 200
+    max_in_degree = max(sentence_graph.vertices(), key=lambda x: x.in_degree()).in_degree()
+    print("Max in degree in sentence graph is: %s" % str(max_in_degree))
+    font_size_func =\
+        lambda in_degree: min(128, max(32, (in_degree / max_in_degree)))
+
+    vertex_font_size_property_map = sentence_graph.degree_property_map("in")
+    for key in sentence_graph.vertices():
+        vertex_font_size_property_map[key] =\
+            font_size_func(vertex_font_size_property_map[key])
+    vertex_size_property_map = sentence_graph.degree_property_map("in")
+    for key in sentence_graph.vertices():
+        vertex_size_property_map[key] =\
+            base_vertex_size * (vertex_size_property_map[key] / max_in_degree)
+
+    output_file_path = os.path.join(output_folder_name, output_file_name)
+
     graph_draw(
         sentence_graph, 
         vertex_text=sentence_graph.vertex_properties["word"], 
-        vertex_font_size=192,
+        vertex_font_size=vertex_font_size_property_map,
+        #vertex_size=vertex_size_property_map,
         vertex_fill_color=sentence_graph.vertex_properties["vertex_color"],
-        output_size=(30000, 30000), 
-        output=output_file_name)
+        output_size=(20000, 20000), 
+        output=output_file_path)
+    
+def sentence_graph_file_path_from_sentence(
+    sentence, 
+    sentence_graphs_folder="sentence-graphs-storage",
+    file_extension=".gt"):
+    return os.path.join(
+        sentence_graphs_folder, sentence.replace(" ", "-") + file_extension)
+
+def save_sentence_graph_to_file(
+        sentence_graph, output_file_path, file_format="gt"):
+    sentence_graph.save(
+        output_file_path,
+        fmt=file_format)
+
+def load_sentence_graph_from_file(input_file_path, file_format="gt"):
+    return load_graph(input_file_path, fmt=file_format)
 
 
 ################################################################################
@@ -485,6 +519,25 @@ def compute_graph_similarity_score(graph1, graph2):
 ################################################################################
 ##############################-----Test & Main-----#############################
 ################################################################################
+
+def sentence_graph_test(sentence, graphic_output_file_name, depth=2):
+    print("Testing build_deep_sentence_graph with sentence_graph_draw....")
+    sentence_graph = build_deep_sentence_graph(
+        sentence, directed=True, depth=depth)
+    sentence_graph_draw(
+        sentence_graph,
+        sentence,
+        output_file_name=graphic_output_file_name)
+    save_sentence_graph_to_file(
+        sentence_graph, sentence_graph_file_path_from_sentence(sentence))
+    loaded_sentence_graph = load_sentence_graph_from_file(
+        sentence_graph_file_path_from_sentence(sentence))
+    if topology.isomorphism(sentence_graph, loaded_sentence_graph):
+        print("Sentence graph successfully loaded from file!!!!")
+    else:
+        print("Sentence graph saved and loaded from file was corrupted!")
+
+    return sentence_graph
 
 def test():
     """
@@ -534,18 +587,23 @@ def test():
         "dogs",
         "noun",
         "~/tester.json"))
+
+    print("\n\n\n")    
     """
 
-    #"""
-    print("\n\n\n")
-
-    print("Testing build_deep_sentence_graph with sentence_graph_draw....")
-    sentence = "Dogs are nice"
-    sentence_graph_draw(
-        build_deep_sentence_graph(sentence, directed=True, depth=3),
-        sentence)
-    #"""
-
+    depth = 4
+    sentence_graph_1 = sentence_graph_test(
+        "Donald Trump is a tyrannical ruler", 
+        "donald-trump-1--synonym-sentence-graphs-debug--depth-%s.png" % depth,
+        depth=depth)
+    sentence_graph_2 = sentence_graph_test(
+        "Donald Trump is a despotic ruler", 
+        "donald-trump-2--synonym-sentence-graphs-debug--depth-%s.png" % depth,
+        depth=depth)
+    if topology.isomorphism(sentence_graph_1, sentence_graph_2):
+        print("That was easy, those sentence graphs are the same!")
+    else:
+        print("As expected, it isn't that easy, the sentence graphs differ.")
 
 if __name__ == '__main__':
     test()
