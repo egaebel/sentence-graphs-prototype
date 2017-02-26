@@ -3,17 +3,16 @@ from aylienapiclient import textapi
 from graph_tool.all import Graph
 from graph_tool.all import graph_draw
 
-from twisted.internet import reactor
-
 import scrapy
-from scrapy.crawler import CrawlerProcess
-from scrapy.crawler import CrawlerRunner
 
 import itertools
 import json
 import os
+import os.path
 import re
+import subprocess
 import sys
+import types
 
 # Use functions from parsey-mcparseface-service
 sys.path.insert(1, "../../parsey-mcparseface-service/src/")
@@ -31,10 +30,14 @@ WIKIPEDIA_LOCAL_ROOT_URL = ""
 WIKTIONARY_WEB_ROOT_URL = "https://en.wiktionary.org/wiki"
 WIKTIONARY_LOCAL_ROOT_URL = ""
 # The part of speech is the only string argument to this query
-WIKTIONARY_XPATH_QUERY =\
+WIKTIONARY_XPATH_QUERY_H3 =\
 """//span[@class="mw-headline"][@id="English"]/../following-sibling::h3/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/li[1]/node()[not(self::ul)][not(self::dl)]//self::text()[normalize-space()]"""
-SHORT_WIKTIONARY_XPATH_QUERY =\
-"""//span[@class="mw-headline"][@id="English"]/../following-sibling::h3/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/li[1]"""
+WIKTIONARY_XPATH_QUERY_H4 =\
+"""//span[@class="mw-headline"][@id="English"]/../following-sibling::h4/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/li[1]/node()[not(self::ul)][not(self::dl)]//self::text()[normalize-space()]"""
+SHORT_WIKTIONARY_XPATH_QUERY_H3 =\
+"""//span[@class="mw-headline"][@id="English"]/../following-sibling::h3/span[@class="mw-headline"][@id="%s"]"""
+SHORT_WIKTIONARY_XPATH_QUERY_H4 =\
+"""//span[@class="mw-headline"][@id="English"]/../following-sibling::h4/span[@class="mw-headline"][@id="%s"]"""
 
 AYLIEN_APP_ID = "7fe8de1d"
 AYLIEN_APP_KEY = "ef49f063d5cb17a97f158e43de5f7747"
@@ -105,32 +108,54 @@ class WiktionarySpider(scrapy.Spider):
         self.urls = kwargs.get('urls')
         self.word = kwargs.get('word')
         self.part_of_speech = kwargs.get('part_of_speech')
+        if not isinstance(self.urls, types.ListType):
+            self.urls = [self.urls]
+        
         # Wiktionary has all part of speech headings with the first letter 
         # captialized and the other letters lowercase
         self.part_of_speech =\
             self.part_of_speech[:1].upper() + self.part_of_speech[1:].lower()
 
+        self.log("\n\n")
+        self.log("urls: %s" % self.urls)
+        self.log("word: %s" % self.word)
+        self.log("part_of_speech: %s" % self.part_of_speech)
+        self.log("\n\n")
+
     def start_requests(self):
         for url in self.urls:
-            yield scrapy.Request(url=url, callback=self.wiktionary_parse)
+            yield scrapy.Request(
+                url=url, 
+                callback=self.wiktionary_parse,
+                errback=lambda x: None)
 
     def wiktionary_parse(self, response):
         self.log("\n\n")
         self.log("Word: %s" % self.word)
         self.log("Part of Speech: %s\n" % self.part_of_speech)
 
-        self.log("short wiktionary xpath result: %s" %
-         response
-             .xpath(SHORT_WIKTIONARY_XPATH_QUERY % self.part_of_speech)
-             .extract())
+        self.log("short wiktionary xpath result (h3): %s" %
+            response
+                .xpath(SHORT_WIKTIONARY_XPATH_QUERY_H3 % self.part_of_speech)
+                .extract())
 
         xpath_parse = response\
-            .xpath(WIKTIONARY_XPATH_QUERY % self.part_of_speech)\
+            .xpath(WIKTIONARY_XPATH_QUERY_H3 % self.part_of_speech)\
+            .extract()
+        if len(xpath_parse) == 0:
+            self.log("short wiktionary xpath result (h4): %s" %
+                response
+                    .xpath(SHORT_WIKTIONARY_XPATH_QUERY_H4 % self.part_of_speech)
+                    .extract())
+            xpath_parse = response\
+            .xpath(WIKTIONARY_XPATH_QUERY_H4 % self.part_of_speech)\
             .extract()
         definition = ' '\
             .join([x.strip() for x in xpath_parse])\
             .replace('.', '')\
             .strip()
+
+        definition = filter(self._character_filter, definition.lower())
 
         self.log("Fully Parsed Definition: %s\n\n\n" % definition)
 
@@ -139,6 +164,15 @@ class WiktionarySpider(scrapy.Spider):
             'part_of_speech': self.part_of_speech,
             'definition': definition,
         }
+
+    def _character_filter(self, x):
+        return ord('a') <= ord(x) <= ord('z')\
+            or ord(x) == ord(' ')\
+            or ord(x) == ord('<')\
+            or ord(x) == ord('=')\
+            or ord(x) == ord('>')\
+            or ord(x) == ord('.')\
+            or ord(x) == ord(',')
 
 ################################################################################
 ###########################-----Wikpedia Functions-----#########################
@@ -204,40 +238,53 @@ def _strip_wikipedia_citations(text):
 #
 # Return a sentence graph of the definition
 def lookup_definition_on_wiktionary(
-        word, part_of_speech, wiktionary_root_url=WIKTIONARY_WEB_ROOT_URL):
+        word, 
+        part_of_speech, 
+        wiktionary_root_url=WIKTIONARY_WEB_ROOT_URL,
+        use_cache=True):
     print("Looking up %s %s on wiktionary......" % (word, part_of_speech))
     definition_text = _parse_wiktionary(
-        "%s/%s" % (wiktionary_root_url, word), word, part_of_speech)
+        "%s/%s" % (wiktionary_root_url, word), 
+        word, 
+        part_of_speech, 
+        use_cache=use_cache)
     return definition_text
 
 # Use scrapy to parse the wiktionary url (TODO MAKE THIS COMMENT MORE COMPLETE)
-def _parse_wiktionary(wiktionary_url, word, part_of_speech):
-    output_file_path = "scrapy-scrape-test--%s-%s.json"\
+def _parse_wiktionary(wiktionary_url, word, part_of_speech, use_cache=False):
+    output_file_path = "definition-cache/scrapy-scrape-test--%s-%s.json"\
         % (word, part_of_speech)
-    try:
-        os.remove(output_file_path)
-    except:
-        pass
-
-    settings = {
-        'FEED_FORMAT': 'json',
-        'FEED_URI': output_file_path,
-        'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)',
-    }
-    process = CrawlerProcess(settings)
-    deferred_result = process.crawl(
-        WiktionarySpider, 
-        urls=[wiktionary_url], 
-        word=word,
-        part_of_speech=part_of_speech)
-    process.start()
+    if not use_cache or not os.path.exists(output_file_path):
+        _run_scrapyd_spider(
+            wiktionary_url, word, part_of_speech, output_file_path)
 
     print("\n\n\n")
     with open(output_file_path, 'r') as json_definition_data:
-        definition_data = json.load(json_definition_data)
-        print("definition_data: %s" % definition_data)
-        print("\n\ndefinition: %s\n" % definition_data[0]['definition'])
+        try:
+            definition_data = json.load(json_definition_data)
+            print("definition_data: %s" % definition_data)
+        except:
+            print("ERROR: Could not find definition file at path: %s" 
+                % output_file_path)
+            return ""
     return definition_data[0]['definition']
+
+def _run_scrapyd_spider(urls, word, part_of_speech, output_file_path):
+    spider_file = "sentence_graph_prototype.py"
+    if not isinstance(urls, types.ListType):
+        urls = [urls]
+    subprocess.check_call([
+        "scrapy", 
+        "runspider", 
+        spider_file, 
+        "-a",
+        "urls=%s" % ",".join(urls),
+        "-a",
+        "word=%s" % word,
+        "-a",
+        "part_of_speech=%s" % part_of_speech,
+        "-o",
+        "%s" % output_file_path])
 
 ################################################################################
 ###################-----Sentence Graph Building Functions-----##################
@@ -266,16 +313,19 @@ def get_text_sentence_graphs(text, directed=False):
 def build_deep_sentence_graph(
         sentence,
         definition_provider=lookup_definition_on_wiktionary, 
-        directed=False):
+        directed=False,
+        depth=10):
     sentence_graph = Graph(directed=directed)
     
     # Vertex properties
     word_property = sentence_graph.new_vertex_property("string")
     part_of_speech_property = sentence_graph.new_vertex_property("string")
     word_pos_tuple_property = sentence_graph.new_vertex_property("object")
+    vertex_color_property = sentence_graph.new_vertex_property("vector<double>")
     sentence_graph.vertex_properties["word"] = word_property
     sentence_graph.vertex_properties["part_of_speech"] = part_of_speech_property
     sentence_graph.vertex_properties["word_pos_tuple"] = word_pos_tuple_property
+    sentence_graph.vertex_properties["vertex_color"] = vertex_color_property
 
     # Edge properties
     sentence_edge_property = sentence_graph.new_edge_property("string")
@@ -285,12 +335,26 @@ def build_deep_sentence_graph(
 
     word_pos_to_vertex_index_mapping = dict()
 
-    _build_deep_sentence_graph_helper(
+    first_sentence_vertices = _build_deep_sentence_graph_helper(
         sentence, 
         sentence_graph, 
         word_pos_to_vertex_index_mapping,
         definition_provider,
-        directed)
+        directed,
+        depth=depth)
+    print("Setting base sentence coloring.....")
+    for word_vertex in first_sentence_vertices:
+        print("Processing word_vertex: %s" % 
+            sentence_graph.vertex_properties["word"][word_vertex])
+        sentence_graph.vertex_properties["vertex_color"][word_vertex] =\
+            [1, 0, 0, 1]
+
+    print("Outputting ALL word vertex colors....")
+    for word_vertex in sentence_graph.vertices():
+        print("word_vertex word: %s" % 
+            sentence_graph.vertex_properties["word"][word_vertex])
+        print("word_vertex color: %s" % 
+            sentence_graph.vertex_properties["vertex_color"][word_vertex])
     return sentence_graph
 
 def _build_deep_sentence_graph_helper(
@@ -298,20 +362,27 @@ def _build_deep_sentence_graph_helper(
         sentence_graph,
         word_pos_to_vertex_index_mapping,
         definition_provider, 
-        directed):
-    print("DEBUG: Building deep sentence graph on sentence: %s" % sentence)
+        directed,
+        depth=None):
+    if depth is not None:
+        if depth == 0:
+            return []
+        depth -= 1
+
+    print("DEBUG*****: Building deep sentence graph on sentence: %s" % sentence)
     sentence = sentence.replace(".", "").lower().strip()
     sentence_vertices = []
     # Parse with ParseyMcParseface to obtain parts of speech tagging
-    print("DEBUG: run_parsey: %s\n" % run_parsey(sentence))
-    print("DEBUG: parse_ascii_tree(run_parsey): %s\n" % parse_ascii_tree(run_parsey(sentence)))
     sentence_parse_tree = parse_ascii_tree(run_parsey(sentence))
 
     prev_word_vertex = None
     for parse_node in sentence_parse_tree.to_sentence_order():
         word = parse_node.word
-        part_of_speech =\
-            PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parse_node.part_of_speech]
+        try:
+            part_of_speech =\
+                PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parse_node.part_of_speech]
+        except:
+            continue
 
         word_pos_tuple = (word, part_of_speech)
         if word_pos_tuple in word_pos_to_vertex_index_mapping:
@@ -326,27 +397,32 @@ def _build_deep_sentence_graph_helper(
                 part_of_speech
             sentence_graph.vertex_properties["word_pos_tuple"][word_vertex] =\
                 word_pos_tuple
+            sentence_graph.vertex_properties["vertex_color"][word_vertex] =\
+                [0, 0, 1, 1]
             word_pos_to_vertex_index_mapping[word_pos_tuple] =\
                 sentence_graph.vertex_index[word_vertex]
 
             # Get definition, add pointer from word to all words in definition
             definition = definition_provider(word, part_of_speech)
 
-            # Get definition of definitions
-            definition_word_vertices = _build_deep_sentence_graph_helper(
-                definition,
-                sentence_graph, 
-                word_pos_to_vertex_index_mapping,
-                definition_provider=definition_provider, 
-                directed=directed)
+            if definition.strip() != '':
+                # Get definition of definitions
+                definition_word_vertices = _build_deep_sentence_graph_helper(
+                    definition,
+                    sentence_graph, 
+                    word_pos_to_vertex_index_mapping,
+                    definition_provider=definition_provider, 
+                    directed=directed,
+                    depth=depth)
 
-            # Add edges from the word_vertex to all definition vertices and set 
-            # the definition edge property on each edge
-            for definition_word_vertex in definition_word_vertices:
-                definition_edge = sentence_graph.add_edge(
-                    word_vertex, definition_word_vertex)
-                sentence_graph.edge_properties["definition_edge"][definition_edge] =\
-                    definition_edge
+                # Add edges from the word_vertex to all definition vertices and set 
+                # the definition edge property on each edge
+                for definition_word_vertex in definition_word_vertices:
+                    definition_edge = sentence_graph.add_edge(
+                        word_vertex, definition_word_vertex)
+                    sentence_graph.edge_properties["definition_edge"][definition_edge] =\
+                        definition_edge
+
 
         sentence_vertices.append(word_vertex)
 
@@ -359,7 +435,6 @@ def _build_deep_sentence_graph_helper(
         prev_word_vertex = word_vertex
 
     return sentence_vertices
-
 
 # Take a sentence in some form and generate a graph
 # edges are built up using word order
@@ -376,15 +451,26 @@ def generate_linear_sentence_graph(sentence, directed=False):
         word_property[word_vertex] = word
     sentence_graph.add_edge_list([(i - 1, i) for i in range(1, len(words))])
 
-    sentence_graph_draw(sentence_graph, "linear-sentence-graph-debug.png")
+    sentence_graph_draw(
+        sentence_graph, sentence, "linear-sentence-graph-debug.png")
 
 def sentence_graph_draw(
-        sentence_graph, output_file_name="sentence-graph-debug.png"):
+        sentence_graph, 
+        sentence,
+        output_file_name="sentence-graph-debug.png"):
+    sentence_dict = {}
+    vertex_fill_colors = []
+    for word in sentence:
+        sentence_dict[word] = True
+    for v in sentence_graph.vertices():
+        if v in sentence_dict:
+            vertex_fill_colors.append()
     graph_draw(
         sentence_graph, 
         vertex_text=sentence_graph.vertex_properties["word"], 
-        vertex_font_size=64,
-        output_size=(4000, 4000), 
+        vertex_font_size=192,
+        vertex_fill_color=sentence_graph.vertex_properties["vertex_color"],
+        output_size=(30000, 30000), 
         output=output_file_name)
 
 
@@ -438,10 +524,27 @@ def test():
     print("Testing run_parsey....")
     print("run_parsey(): ||%s||" % run_parsey("this here is a sentence, it is nice."))
     """
+
+    """
+    print("\n\n\n")
+
+    print("Testing scrapyd spider")
+    print("Output: %s" % _run_scrapyd_spider(
+        "https://en.wiktionary.org/wiki/dogs",
+        "dogs",
+        "noun",
+        "~/tester.json"))
+    """
+
+    #"""
     print("\n\n\n")
 
     print("Testing build_deep_sentence_graph with sentence_graph_draw....")
-    sentence_graph_draw(build_deep_sentence_graph("Dogs are nice"))
+    sentence = "Dogs are nice"
+    sentence_graph_draw(
+        build_deep_sentence_graph(sentence, directed=True, depth=3),
+        sentence)
+    #"""
 
 
 if __name__ == '__main__':
