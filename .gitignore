@@ -8,3 +8,5 @@
 src/data/enwiki-latest-all-titles-in-ns0
 scrapy-scrape-test*.json
 definitions-cache
+sentence-graphs-storage/
+sentence-graphs-visualization/
