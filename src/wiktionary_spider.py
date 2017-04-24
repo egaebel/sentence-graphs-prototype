@@ -73,8 +73,9 @@ class WiktionarySpider(scrapy.Spider):
                 callback=self.wiktionary_parse,
                 errback=self.error_callback)
 
-    def error_callback(self):
+    def error_callback(self, x):
         self.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$Error callback reached")
+        self.log("Other argument is: %s" % x)
         # If the word is a noun, try retrying with the noun capitalized
         if self.part_of_speech.lower() == 'noun':
             upper_cased_word = self.word[:1].upper() + self.word[1:].lower()
@@ -127,13 +128,14 @@ class WiktionarySpider(scrapy.Spider):
         return output_dict
 
     def _write_definition_json_to_file(self, output_dict, output_file_path):
+        max_file_lock_iterations = 1000
         print("Writing: %s to file" % output_dict)
-        lock_pass = str(uuid.uuid1())
-        file_lock = Locker(
-            filePath=output_file_path, lockPass=lock_pass, mode='w')
-
         written = False
+        file_lock_iteration = 0
         while not written:
+            # Create file lock
+            lock_pass = str(uuid.uuid1())
+            file_lock = Locker(filePath=output_file_path, lockPass=lock_pass, mode='w')
             with file_lock as lock:
                 was_acquired, code, fd = lock
                 # If lock was acquired
@@ -142,6 +144,10 @@ class WiktionarySpider(scrapy.Spider):
                     written = True
                 else:
                     time.sleep(1)
+            file_lock_iteration += 1
+            if file_lock_iteration >= max_file_lock_iterations:
+                print("ERROR: File lock acquisition in wiktionary_spider timed out at %d "
+                    + "attempts to acquire file lock on file: %s" % (file_lock_iteration, output_file_path))
 
     def _character_filter(self, x):
         return ord('a') <= ord(x) <= ord('z')\

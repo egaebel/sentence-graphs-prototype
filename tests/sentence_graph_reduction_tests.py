@@ -1,7 +1,6 @@
 from graph_tool.all import Graph
+from graph_tool import topology
 
-from multiprocessing import Lock
-from multiprocessing import Manager
 import os
 import unittest
 
@@ -10,6 +9,7 @@ import sentence_graph_test_utilities
 # Need to add to python path to access src folder
 import sys
 sys.path.insert(1, "../src")
+from sentence_graph import SentenceGraph
 from sentence_graph_construction import build_deep_sentence_graph
 from sentence_graph_reduction import reduce_sentence_graphs
 from sentence_graph_io import load_sentence_graph_from_file
@@ -22,7 +22,28 @@ from wiktionary_client import WiktionaryClient
 WIKTIONARY_SPIDER_FILE_PATH = "../src/wiktionary_spider.py"
 
 SENTENCE_1 = "I attend a wonderful college."
+"""
+Input: I attend a wonderful college .
+Parse:
+attend VBP ROOT @2
+ +-- I PRP nsubj @1
+ +-- college NN dobj @5
+ |   +-- a DT det @3
+ |   +-- wonderful JJ amod @4
+ +-- . . punct @6
+
+"""
 SENTENCE_2 = "I attend a great university."
+"""
+Input: I attend a great university .
+Parse:
+attend VBP ROOT @2
+ +-- I PRP nsubj @1
+ +-- university NN dobj @5
+ |   +-- a DT det @3
+ |   +-- great JJ amod @4
+ +-- . . punct @6
+"""
 
 sentences = [
         "Austin is the capitol of Texas.",
@@ -54,7 +75,7 @@ class TestSentenceGraphReduction(unittest.TestCase):
         if clear_cached:
             _clear_cached_sentence_graph_files(sentence_graphs_cache_folder)
 
-        wiktionary_client = WiktionaryClient(Manager().Lock(), WIKTIONARY_SPIDER_FILE_PATH)
+        wiktionary_client = WiktionaryClient(spider_file=WIKTIONARY_SPIDER_FILE_PATH)
 
         sentence_graphs = []
         for sentence in sentences:
@@ -85,21 +106,58 @@ class TestSentenceGraphReduction(unittest.TestCase):
                 file_extension=".png")
 
     def test_two_sentence_depth_1_reduction(self):
-        expected_reduced_sentence_graph_1 = Graph(directed=False)
-        wonderful_vertex = expected_reduced_sentence_graph_1.add_vertex()
-        college_vertex = expected_reduced_sentence_graph_1.add_vertex()
-        expected_reduced_sentence_graph_1.add_edge(wonderful_vertex, college_vertex)
 
-        expected_reduced_sentence_graph_2 = Graph(directed=False)
-        great_vertex = expected_reduced_sentence_graph_2.add_vertex()
-        university_vertex = expected_reduced_sentence_graph_2.add_vertex()
-        expected_reduced_sentence_graph_2.add_edge(great_vertex, university_vertex)
+        SENTENCE_1 = "I attend a wonderful college."
+        """
+        Input: I attend a wonderful college .
+        Parse:
+        attend VBP ROOT @2
+         +-- I PRP nsubj @1
+         +-- college NN dobj @5
+         |   +-- a DT det @3
+         |   +-- wonderful JJ amod @4
+         +-- . . punct @6
 
+        """
+        SENTENCE_2 = "I attend a great university."
+        """
+        Input: I attend a great university .
+        Parse:
+        attend VBP ROOT @2
+         +-- I PRP nsubj @1
+         +-- university NN dobj @5
+         |   +-- a DT det @3
+         |   +-- great JJ amod @4
+         +-- . . punct @6
+        """     
+
+        expected_reduced_sentence_graph_1 = SentenceGraph(directed=False)
+        wonderful_vertex = expected_reduced_sentence_graph_1.add_vertex("wonderful", "Adjective")
+        college_vertex = expected_reduced_sentence_graph_1.add_vertex("college", "Noun")
+        expected_reduced_sentence_graph_1.add_sentence_edge(wonderful_vertex, college_vertex)
+
+        expected_reduced_sentence_graph_2 = SentenceGraph(directed=False)
+        great_vertex = expected_reduced_sentence_graph_2.add_vertex("great", "Adjective")
+        university_vertex = expected_reduced_sentence_graph_2.add_vertex("university", "Noun")
+        expected_reduced_sentence_graph_2.add_sentence_edge(great_vertex, university_vertex)
+
+        """
+        # Debugging help
+        sentence_graph_draw(
+            expected_reduced_sentence_graph_1, SENTENCE_1, output_folder_name="debug-viz", output_file_name="expected-reduced-sentence-graph-1")
+        sentence_graph_draw(
+            expected_reduced_sentence_graph_2, SENTENCE_2, output_folder_name="debug-viz", output_file_name="expected-reduced-sentence-graph-2")
+        """
+        
         sentence_graphs, reduced_sentence_graphs = _two_sentence_depth_reduction(
             SENTENCE_1, SENTENCE_2, depth=1)
 
-        self.assertEqual(expected_reduced_sentence_graph_1, reduced_sentence_graphs[0])
-        self.assertEqual(expected_reduced_sentence_graph_2, reduced_sentence_graphs[1])
+        self.assertTrue(
+            topology.isomorphism(reduced_sentence_graphs[0].get_graph(), 
+            expected_reduced_sentence_graph_1.get_graph()))
+        self.assertTrue(
+            topology.isomorphism(reduced_sentence_graphs[1].get_graph(), 
+            expected_reduced_sentence_graph_2.get_graph()))
 
     """
     def test_two_sentence_depth_2_reduction(self):
@@ -118,7 +176,7 @@ class TestSentenceGraphReduction(unittest.TestCase):
     """
 
 def _two_sentence_depth_reduction(sentence_1, sentence_2, depth):
-    wiktionary_client = WiktionaryClient(Manager().Lock(), WIKTIONARY_SPIDER_FILE_PATH)
+    wiktionary_client = WiktionaryClient(spider_file=WIKTIONARY_SPIDER_FILE_PATH)
 
     sentence_graph_1 = build_deep_sentence_graph(
         sentence_1, wiktionary_client, depth=depth)
