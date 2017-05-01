@@ -25,26 +25,23 @@ def approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2):
     sentence_graph1_copy = sentence_graph1.copy()
     sentence_graph2_copy = sentence_graph2.copy()
 
-    # Make graph node counts equal by adding dummy nodes to the smaller graph
-    #dummy_vertices = _equalize_graph_node_counts(sentence_graph1_copy, sentence_graph2_copy)
-
     sentence_graph1_word_pos_tuples = sorted(sentence_graph1_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
     sentence_graph2_word_pos_tuples = sorted(sentence_graph2_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
 
     N_M = sentence_graph1_copy.get_num_vertices() + sentence_graph2_copy.get_num_vertices()
 
     # Construct node cost matrix
-    print("Constructing cost matrix.....")
+    print("Constructing cost matrix of size %d....." % N_M)
     cost_matrix = np.zeros((N_M, N_M))
     for i in range(N_M):
         for j in range(N_M):
             # numpy indexes by row, column
             cost_matrix[i, j] =(
                 _vertex_cost(
-                        sentence_graph1_word_pos_tuples, 
-                        sentence_graph2_word_pos_tuples, 
-                        i, 
-                        j) 
+                    sentence_graph1_word_pos_tuples, 
+                    sentence_graph2_word_pos_tuples, 
+                    i, 
+                    j) 
                 + _compute_edge_cost(
                     sentence_graph1_copy, 
                     sentence_graph2_copy, 
@@ -60,7 +57,7 @@ def approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2):
     print("Finished running Hungarian algorithm!")
 
     # Use resulting cost matrix to determine the graph edit distance
-    return cost_matrix[row_indices, col_indices].sum()# / N_M
+    return cost_matrix[row_indices, col_indices].sum()
 
 # Add dummy nodes to the graph with fewer vertices so the graphs have equal vertex counts
 #
@@ -156,7 +153,7 @@ def _compute_edge_cost(
 
     row_indices, col_indices = optimize.linear_sum_assignment(cost_matrix)
 
-    return cost_matrix[row_indices, col_indices].sum()# / N_M
+    return cost_matrix[row_indices, col_indices].sum()
 
 
 def _edge_cost(neighbor_word_pos_tuples1, neighbor_word_pos_tuples2, i, j):
@@ -184,13 +181,13 @@ def _edge_cost(neighbor_word_pos_tuples1, neighbor_word_pos_tuples2, i, j):
 def select_prototype_graphs(graphs, dimensions):
     pass
 
-def graph_dissimilarity_embedding(
-        graph, 
-        prototype_graphs, 
+def sentence_graph_dissimilarity_embedding(
+        sentence_graph, 
+        prototype_sentence_graphs, 
         graph_edit_distance_func=approximate_sentence_graph_edit_distance):
     dissimilarity_vector = list()
-    for prototype_graph in prototype_graphs:
-        dissimilarity_vector.append(graph_edit_distance_func(graph, prototype_graph))
+    for prototype_sentence_graph in prototype_sentence_graphs:
+        dissimilarity_vector.append(graph_edit_distance_func(sentence_graph, prototype_sentence_graph))
     return dissimilarity_vector
 
 if __name__ == '__main__':

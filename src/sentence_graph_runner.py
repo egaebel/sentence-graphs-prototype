@@ -1,4 +1,5 @@
 from graph_to_vector import approximate_sentence_graph_edit_distance
+from graph_to_vector import sentence_graph_dissimilarity_embedding
 from sentence_graph import SentenceGraph
 from sentence_graph_construction import get_text_sentence_graphs
 from sentence_graph_construction import build_deep_sentence_graph
@@ -52,8 +53,8 @@ def sentence_graph_creation_func(sentence):
     print("Creating sentence graph for sentence: %s" % sentence)
     depth = 2
     directed = True
-    use_sentence_graph_cache = False
-    use_definition_cache = False
+    use_sentence_graph_cache = True
+    use_definition_cache = True
 
     loaded_from_file = False
     if use_sentence_graph_cache:
@@ -148,14 +149,57 @@ def test():
     # has not been defined yet the children will not have a reference to it
     pool = Pool(8)
 
+    # Wikipedia random access + graph edit distance
+    """
+    wikipedia_articles = scrape_wikipedia(randomize=True, page_limit=20)
+    for wikipedia_article in wikipedia_articles:
+
+        print("Wikipedia_article['body']: %s\n" % wikipedia_article["body"][:75])
+
+        sentences = wikipedia_article["body"].split('.')
+        sentences = filter(lambda x: x.strip() != '', sentences)
+
+        sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
+
+        wikipedia_article["sentence_graphs"] = sentence_graphs
+
+        print("Processed %s sentences" % str(shared_sentence_graph_count))
+        shared_sentence_graph_count.set(0)
+        print("\n\n\n")
+
+        for sentence_graph in sentence_graphs:
+            save_sentence_graph_to_file(
+                sentence_graph, 
+                sentence_graph_file_path_from_sentence(sentence_graph.get_sentence()))
+    """
+
+    # Graph dissimilarity measures
+    basis_sentences = [
+        "What is this absolute and total nonsense",
+        "Algorithms are difficult to devise",
+        "Reptiles are by far the strangest creatures"]
+
     sentences = [
         "I attended a fantastic college", 
         "I went to a great university", 
         "I attended a horrible college", 
         "I went to the worst university", ]
-    #sentence_graphs = []
-    #for sentence in sentences:
-    #    sentence_graphs.append(sentence_graph_creation_func(sentence))
+
+    basis_sentence_graphs = pool.map(sentence_graph_creation_func, basis_sentences, 1)
+    sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
+
+    for sentence_graph in sentence_graphs:
+        print("Calculating embedding for sentence: %s" % sentence_graph.get_sentence())
+        dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, basis_sentence_graphs)
+        print("Dissimilarity embedding vector: %s\n" % ', '.join(dissimilarity_vector))
+
+    # Graph edit distance tests
+    """
+    sentences = [
+        "I attended a fantastic college", 
+        "I went to a great university", 
+        "I attended a horrible college", 
+        "I went to the worst university", ]
     sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
 
     print("Computing graph edit distance between all the sentence graphs!")
@@ -172,7 +216,7 @@ def test():
                 % (sentence_graph1.get_sentence(), sentence_graph2.get_sentence()))
             graph_edit_distance = approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2)
             print("Graph edit distance: %d\n\n" % graph_edit_distance)
-
+    """
 
     # Wikipedia random access sentence_graphs testing
     """
