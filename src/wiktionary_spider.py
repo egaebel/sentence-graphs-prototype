@@ -9,6 +9,8 @@ import uuid
 
 # The part of speech is the only string argument to this query
 WIKTIONARY_XPATH_QUERY_H3 =\
+"""//span[@class="mw-headline"][@id="English"]/../following-sibling::h3/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/node()[not(self::ul)][not(self::dl)]//self::text()[normalize-space()]"""
+WIKTIONARY_XPATH_QUERY_H3_FIRST_LIST_ITEM =\
 """//span[@class="mw-headline"][@id="English"]/../following-sibling::h3/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/li[1]/node()[not(self::ul)][not(self::dl)]//self::text()[normalize-space()]"""
 WIKTIONARY_XPATH_QUERY_H4 =\
 """//span[@class="mw-headline"][@id="English"]/../following-sibling::h4/span[@class="mw-headline"][@id="%s"]/../following-sibling::ol[1]/li[1]/node()[not(self::ul)][not(self::dl)]//self::text()[normalize-space()]"""

@@ -1,3 +1,4 @@
+from graph_to_vector import approximate_sentence_graph_edit_distance
 from sentence_graph import SentenceGraph
 from sentence_graph_construction import get_text_sentence_graphs
 from sentence_graph_construction import build_deep_sentence_graph
@@ -51,15 +52,16 @@ def sentence_graph_creation_func(sentence):
     print("Creating sentence graph for sentence: %s" % sentence)
     depth = 2
     directed = True
-    use_sentence_graph_cache = True
-    use_definition_cache = True
+    use_sentence_graph_cache = False
+    use_definition_cache = False
 
     loaded_from_file = False
     if use_sentence_graph_cache:
         loaded_from_file = True
         sentence = sentence.strip()
         sentence_graph = load_sentence_graph_from_file(
-            sentence_graph_file_path_from_sentence(sentence))
+            sentence_graph_file_path_from_sentence("depth=" + str(depth) + "--" + sentence),
+            sentence)
 
     if not use_sentence_graph_cache or sentence_graph is None:
         sentence_graph =\
@@ -78,7 +80,7 @@ def sentence_graph_creation_func(sentence):
         # Save sentence graphs
         save_sentence_graph_to_file(
             sentence_graph, 
-            sentence_graph_file_path_from_sentence(sentence))
+            sentence_graph_file_path_from_sentence("depth=" + str(depth) + "--" + sentence))
 
     sentence_graph_draw(
         sentence_graph,
@@ -146,8 +148,34 @@ def test():
     # has not been defined yet the children will not have a reference to it
     pool = Pool(8)
 
+    sentences = [
+        "I attended a fantastic college", 
+        "I went to a great university", 
+        "I attended a horrible college", 
+        "I went to the worst university", ]
+    #sentence_graphs = []
+    #for sentence in sentences:
+    #    sentence_graphs.append(sentence_graph_creation_func(sentence))
+    sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
+
+    print("Computing graph edit distance between all the sentence graphs!")
+    all_sentence_pairs = dict()
+    for sentence_graph1 in sentence_graphs:
+        for sentence_graph2 in sentence_graphs:
+            key = ''.join(sorted([sentence_graph1.get_sentence(), sentence_graph2.get_sentence()]))
+            all_sentence_pairs[key] = (sentence_graph1, sentence_graph2)
+    for sentence_pair in all_sentence_pairs:
+        sentence_graph1 = all_sentence_pairs[sentence_pair][0]
+        sentence_graph2 = all_sentence_pairs[sentence_pair][1]
+        if sentence_graph1.get_sentence() != sentence_graph2.get_sentence():
+            print("Graph edit distance between sentences: \n|%s|\nAND\n|%s|\n" 
+                % (sentence_graph1.get_sentence(), sentence_graph2.get_sentence()))
+            graph_edit_distance = approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2)
+            print("Graph edit distance: %d\n\n" % graph_edit_distance)
+
+
     # Wikipedia random access sentence_graphs testing
-    #"""
+    """
     wikipedia_articles = scrape_wikipedia(randomize=True, page_limit=3)
     for wikipedia_article in wikipedia_articles:
 
@@ -168,6 +196,7 @@ def test():
             save_sentence_graph_to_file(
                 sentence_graph, 
                 sentence_graph_file_path_from_sentence(sentence_graph.get_sentence()))
+
     #"""
 
     # Corex testing

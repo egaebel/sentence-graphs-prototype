@@ -35,8 +35,8 @@ class SentenceGraph():
         self.sentence_graph.edge_properties[SENTENCE_EDGE_KEY] = sentence_edge_property
         self.sentence_graph.edge_properties[DEFINITION_EDGE_KEY] = definition_edge_property
 
-    def get_sentence():
-        self.sentence_graph.graph_properties[SENTENCE_KEY]
+    def get_sentence(self):
+        return self.sentence_graph.graph_properties[SENTENCE_KEY]
 
     def add_vertex(self, word, pos):
         word_pos_tuple = (word, pos)
@@ -148,6 +148,12 @@ class SentenceGraph():
     def get_word_pos_tuples(self):
         return [self.get_word_pos_tuple(v) for v in self.sentence_graph.vertices()]
 
+    def get_num_vertices(self):
+        return self.sentence_graph.num_vertices()
+
+    def get_num_edges(self):
+        return self.sentence_graph.num_edges()
+
     def get_edge(self, word1, pos1, word2, pos2):
         vertex_1 = self.get_vertex(word1, pos1)
         vertex_2 = self.get_vertex(word2, pos2)
@@ -186,4 +192,6 @@ class SentenceGraph():
         return self.sentence_graph
 
     def copy(self):
-        return SentenceGraph(graph=self.sentence_graph.copy())
+        return SentenceGraph(
+            sentence=self.sentence_graph.graph_properties[SENTENCE_KEY], 
+            graph=self.sentence_graph.copy())

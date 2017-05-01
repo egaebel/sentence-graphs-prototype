@@ -57,11 +57,14 @@ def sentence_graph_file_path_from_sentence(
 def save_sentence_graph_to_file(sentence_graph, output_file_path, file_format="gt"):
     sentence_graph.get_graph().save(output_file_path, fmt=file_format)
 
-def load_sentence_graph_from_file(input_file_path, file_format="gt"):
+def load_sentence_graph_from_file(input_file_path, sentence, file_format="gt"):
     try:
-        return SentenceGraph(graph=load_graph(input_file_path, fmt=file_format))
+        loaded_graph = load_graph(input_file_path, fmt=file_format)
+        print("Loaded graph: |%s|" % loaded_graph)
+        if loaded_graph is not None:
+            return SentenceGraph(sentence=sentence, graph=loaded_graph)
     except Exception, e:
         print("ERROR: Cannot load sentence graph in file format: %s from file path: %s,"
             " due to exception:\n%s\nThis is normal if caching is being relied on." 
             % (file_format, input_file_path, e))
-        return None
+    return None
