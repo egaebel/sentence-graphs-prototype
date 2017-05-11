@@ -3,6 +3,8 @@ from sentence_graph import SentenceGraph
 from scipy import optimize
 import numpy as np
 
+import random
+
 INFINITY = np.iinfo(np.int32).max
 DUMMY_VERTEX_VALUE = "___"
 
@@ -16,64 +18,17 @@ COST_EDGE_REPLACEMENT = 2 * EDGE_COST_MULTIPLIER
 COST_EDGE_INSERTION = 1 * EDGE_COST_MULTIPLIER
 COST_EDGE_DELETION = 1 * EDGE_COST_MULTIPLIER
 
-def astar_graph_edit_distance(graph1, graph2):
+def astar_sentence_graph_edit_distance(graph1, graph2):
+    pass
+    # Iterate over each word-pos
+    #   # Iterate over each edge 
+    #       # create neighbor graph
+    #       # check cost of graph
+
+def _graph_cost_heuristic(graph1, graph2):
     pass
 
-def approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2):
-    print("Approximating graph edit distance....")
-    # Copy graphs
-    sentence_graph1_copy = sentence_graph1.copy()
-    sentence_graph2_copy = sentence_graph2.copy()
-
-    sentence_graph1_word_pos_tuples = sorted(sentence_graph1_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
-    sentence_graph2_word_pos_tuples = sorted(sentence_graph2_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
-
-    N_M = sentence_graph1_copy.get_num_vertices() + sentence_graph2_copy.get_num_vertices()
-
-    # Construct node cost matrix
-    print("Constructing cost matrix of size %d....." % N_M)
-    cost_matrix = np.zeros((N_M, N_M))
-    for i in range(N_M):
-        for j in range(N_M):
-            # numpy indexes by row, column
-            cost_matrix[i, j] =(
-                _vertex_cost(
-                    sentence_graph1_word_pos_tuples, 
-                    sentence_graph2_word_pos_tuples, 
-                    i, 
-                    j) 
-                + _compute_edge_cost(
-                    sentence_graph1_copy, 
-                    sentence_graph2_copy, 
-                    sentence_graph1_word_pos_tuples, 
-                    sentence_graph2_word_pos_tuples, 
-                    i, 
-                    j))
-    print("Cost matrix constructed!")
-
-    # Run the Hungarian algorithm on cost matrix
-    print("Running Hungarian algorithm.....")
-    row_indices, col_indices = optimize.linear_sum_assignment(cost_matrix)
-    print("Finished running Hungarian algorithm!")
-
-    # Use resulting cost matrix to determine the graph edit distance
-    return cost_matrix[row_indices, col_indices].sum()
-
-# Add dummy nodes to the graph with fewer vertices so the graphs have equal vertex counts
-#
-# Return the list of vertices so they can be removed later
-def _equalize_sentence_graph_node_counts(sentence_graph1, sentence_graph2):
-    if sentence_graph1.get_num_vertices() == sentence_graph2.get_num_vertices():
-        return list()
-    elif sentence_graph2.get_num_vertices() > sentence_graph1.get_num_vertices():
-        return _equalize_sentence_graph_node_counts(sentence_graph2, sentence_graph1)
-    vertex_count_difference = sentence_graph1.get_num_vertices() - sentence_graph2.get_num_vertices()
-    dummy_vertices = list()
-    for i in range(vertex_count_difference):
-        dummy_vertices.append(graph2.add_vertex(DUMMY_VERTEX_VALUE, DUMMY_VERTEX_VALUE))
-    return dummy_vertices
-
-def _vertex_cost(
+def _sentence_graph_vertex_cost(
         sentence_graph1_word_pos_tuples, 
         sentence_graph2_word_pos_tuples, 
         i, 
@@ -102,12 +57,12 @@ def _vertex_cost(
         else:
             return INFINITY
     else:
-        if sentence_graph1_word_pos_tuples[i] != sentence_graph2_word_pos_tuples[j]:
-            return COST_NODE_REPLACEMENT
-        else:
+        if sentence_graph1_word_pos_tuples[i] == sentence_graph2_word_pos_tuples[j]:
             return 0
+        else:
+            return COST_NODE_REPLACEMENT
 
-def _compute_edge_cost(
+def _sentence_graph_compute_edge_cost(
         sentence_graph1, 
         sentence_graph2, 
         sentence_graph1_word_pos_tuples, 
@@ -118,14 +73,16 @@ def _compute_edge_cost(
     M_nodes = len(sentence_graph2_word_pos_tuples)
 
     if i < N_nodes:
-        vertex1 = sentence_graph1.get_vertex(sentence_graph1_word_pos_tuples[i][0], sentence_graph1_word_pos_tuples[i][1])
+        vertex1 = sentence_graph1.get_vertex(
+            sentence_graph1_word_pos_tuples[i][0], sentence_graph1_word_pos_tuples[i][1])
         neighbor_word_pos_tuples1 =\
             sentence_graph1.get_vertex_out_neighbor_word_pos_tuples(vertex1)\
             + sentence_graph1.get_vertex_in_neighbor_word_pos_tuples(vertex1)
         neighbor_word_pos_tuples1 = sorted(neighbor_word_pos_tuples1, key=lambda x: x[0] + x[1])
 
     if j < M_nodes:
-        vertex2 = sentence_graph2.get_vertex(sentence_graph2_word_pos_tuples[j][0], sentence_graph2_word_pos_tuples[j][1])
+        vertex2 = sentence_graph2.get_vertex(
+            sentence_graph2_word_pos_tuples[j][0], sentence_graph2_word_pos_tuples[j][1])
         neighbor_word_pos_tuples2 =\
             sentence_graph2.get_vertex_out_neighbor_word_pos_tuples(vertex2)\
             + sentence_graph2.get_vertex_in_neighbor_word_pos_tuples(vertex2)
@@ -149,14 +106,22 @@ def _compute_edge_cost(
     cost_matrix = np.zeros((N_M, N_M))
     for i in range(N_M):
         for j in range(N_M):
-            cost_matrix[i, j] = _edge_cost(neighbor_word_pos_tuples1, neighbor_word_pos_tuples2, i, j)
+            cost_matrix[i, j] = _sentence_graph_edge_cost(
+                neighbor_word_pos_tuples1, 
+                neighbor_word_pos_tuples2, 
+                i, 
+                j)
 
     row_indices, col_indices = optimize.linear_sum_assignment(cost_matrix)
 
     return cost_matrix[row_indices, col_indices].sum()
 
 
-def _edge_cost(neighbor_word_pos_tuples1, neighbor_word_pos_tuples2, i, j):
+def _sentence_graph_edge_cost(
+        neighbor_word_pos_tuples1, 
+        neighbor_word_pos_tuples2, 
+        i, 
+        j):
     N = len(neighbor_word_pos_tuples1)
     M = len(neighbor_word_pos_tuples2)
 
@@ -173,13 +138,73 @@ def _edge_cost(neighbor_word_pos_tuples1, neighbor_word_pos_tuples2, i, j):
         else:
             return INFINITY
     else:
-        if neighbor_word_pos_tuples1[i] != neighbor_word_pos_tuples2[j]:
-            return COST_EDGE_REPLACEMENT
-        else:
+        if neighbor_word_pos_tuples1[i] == neighbor_word_pos_tuples2[j]:
             return 0
+        else:
+            return COST_EDGE_REPLACEMENT
+
+def approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2):
+    return approximate_graph_edit_distance(
+        sentence_graph1, 
+        sentence_graph2, 
+        vertex_cost_func=_sentence_graph_vertex_cost,
+        compute_edge_cost_func=_sentence_graph_compute_edge_cost)
+
+def approximate_graph_edit_distance(
+        sentence_graph1, 
+        sentence_graph2,
+        vertex_cost_func=_sentence_graph_vertex_cost,
+        compute_edge_cost_func=_sentence_graph_compute_edge_cost):
+    print("Approximating graph edit distance....")
+    # Copy graphs
+    sentence_graph1_copy = sentence_graph1.copy()
+    sentence_graph2_copy = sentence_graph2.copy()
+
+    sentence_graph1_word_pos_tuples = sorted(sentence_graph1_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
+    sentence_graph2_word_pos_tuples = sorted(sentence_graph2_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
+
+    N_M = sentence_graph1_copy.get_num_vertices() + sentence_graph2_copy.get_num_vertices()
+
+    # Construct node cost matrix
+    print("Constructing cost matrix of size %d....." % N_M)
+    cost_matrix = np.zeros((N_M, N_M))
+    for i in range(N_M):
+        for j in range(N_M):
+            # numpy indexes by row, column
+            cost_matrix[i, j] =(
+                vertex_cost_func(
+                    sentence_graph1_word_pos_tuples, 
+                    sentence_graph2_word_pos_tuples, 
+                    i, 
+                    j) 
+                + compute_edge_cost_func(
+                    sentence_graph1_copy, 
+                    sentence_graph2_copy, 
+                    sentence_graph1_word_pos_tuples, 
+                    sentence_graph2_word_pos_tuples, 
+                    i, 
+                    j))
+    print("Cost matrix constructed!")
+
+    # Run the Hungarian algorithm on cost matrix
+    print("Running Hungarian algorithm.....")
+    row_indices, col_indices = optimize.linear_sum_assignment(cost_matrix)
+    print("Finished running Hungarian algorithm!")
+
+    # Use resulting cost matrix to determine the graph edit distance
+    return cost_matrix[row_indices, col_indices].sum()
 
 def select_prototype_graphs(graphs, dimensions):
-    pass
+    if len(graphs) <= dimensions:
+        return graphs, [x for x in range(len(graphs))]
+    # TODO: Make this actually be smart and not just select randomly
+    prototype_graphs = dict()
+    for i in range(dimensions):
+        random_index = random.randint(0, len(graphs) - 1)
+        while random_index in prototype_graphs:
+            random_index = random.randint(0, len(graphs) - 1)
+        prototype_graphs[random_index] = graphs[random_index]
+    return prototype_graphs.values(), prototype_graphs.keys()
 
 def sentence_graph_dissimilarity_embedding(
         sentence_graph, 

@@ -20,7 +20,7 @@ SHORT_WIKTIONARY_XPATH_QUERY_H4 =\
 """//span[@class="mw-headline"][@id="English"]/../following-sibling::h4/span[@class="mw-headline"][@id="%s"]"""
 
 ################################################################################
-###########################-----Scrapy Spider(s)-----###########################
+###########################-----Scrapy Spider(s)-----#######################################
 ################################################################################
 
 # A scrapy spider for scraping a definition of a word from Wiktionary
@@ -81,7 +81,7 @@ class WiktionarySpider(scrapy.Spider):
         # If the word is a noun, try retrying with the noun capitalized
         if self.part_of_speech.lower() == 'noun':
             upper_cased_word = self.word[:1].upper() + self.word[1:].lower()
-            url = "%s/%s" % (root_url, upper_cased_word) 
+            url = "%s/%s" % (self.root_url, upper_cased_word) 
             yield scrapy.Request(
                 url=url, 
                 callback=self.wiktionary_parse,

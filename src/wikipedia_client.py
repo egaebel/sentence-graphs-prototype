@@ -37,7 +37,7 @@ def scrape_wikipedia(
             continue
         print("\n\n\n")
         wikipedia_article_body = _strip_wikipedia_citations(\
-            get_article_text(client, url))
+            _get_article_text(client, url))
         print("Scraped article body: %s" % wikipedia_article_body[:100])
         print("\n")
         wikipedia_article_dict = {
@@ -51,6 +51,21 @@ def scrape_wikipedia(
         if page_limit > 0 and url_count >= page_limit:
             break
 
+    return wikipedia_articles
+
+def scrape_wikipedia_articles(urls):
+    wikipedia_articles = list()
+    for url in urls:
+        wikipedia_article_body = _strip_wikipedia_citations(\
+            _get_article_text(client, url))
+        print("Scraped article body: %s" % wikipedia_article_body[:100])
+        print("\n")
+        wikipedia_article_dict = {
+            'url': url, 
+            'body': wikipedia_article_body, 
+            'sentence_graphs': list(),
+        }
+        wikipedia_articles.append(wikipedia_article_dict)
     return wikipedia_articles
 
 def _has_no_strange_characters(url):
@@ -67,8 +82,8 @@ def get_all_wikipedia_urls(wikipedia_root_url, article_titles_file):
 # Use Aylien API to get text from URL or full text
 #
 # Return string with article text
-def get_article_text(client, url):
-    print("Scraping wikipedia url: ||%s||" % url)
+def _get_article_text(client, url):
+    print("Scraping wikipedia url: || %s ||" % url)
     extracted_results = client.Extract(url)
     print("Extracted results: %s" % extracted_results)
     return extracted_results["article"]
@@ -84,4 +99,4 @@ def _strip_wikipedia_citations(text):
 
 if __name__ == '__main__':
     client = _get_aylien_client()
-    print("Article Text: %s" % get_article_text(client, "https://en.wikipedia.org/wiki/Scottish_Hard_Court_Championships"))
+    print("Article Text: %s" % _get_article_text(client, "https://en.wikipedia.org/wiki/Scottish_Hard_Court_Championships"))

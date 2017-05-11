@@ -5,6 +5,8 @@ WORD_KEY = "word"
 PART_OF_SPEECH_KEY = "part_of_speech"
 VERTEX_COLOR_KEY = "vertex_color"
 SENTENCE_EDGE_KEY = "sentence_edge"
+PARSED_DEPENDENCIES_EDGE_KEY = "sentence_dependencies_edge"
+DEPENDENCY_LABEL_KEY = "dependency_label"
 DEFINITION_EDGE_KEY = "definition_edge"
 
 class SentenceGraph():
@@ -32,8 +34,12 @@ class SentenceGraph():
         # Edge properties
         sentence_edge_property = self.sentence_graph.new_edge_property("string")
         definition_edge_property = self.sentence_graph.new_edge_property("string")
+        parsed_dependencies_property = self.sentence_graph.new_edge_property("string")
+        dependency_label_property = self.sentence_graph.new_edge_property("string")
         self.sentence_graph.edge_properties[SENTENCE_EDGE_KEY] = sentence_edge_property
         self.sentence_graph.edge_properties[DEFINITION_EDGE_KEY] = definition_edge_property
+        self.sentence_graph.edge_properties[PARSED_DEPENDENCIES_EDGE_KEY] = parsed_dependencies_property
+        self.sentence_graph.edge_properties[DEPENDENCY_LABEL_KEY] = dependency_label_property
 
     def get_sentence(self):
         return self.sentence_graph.graph_properties[SENTENCE_KEY]
