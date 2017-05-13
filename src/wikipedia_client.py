@@ -54,6 +54,7 @@ def scrape_wikipedia(
     return wikipedia_articles
 
 def scrape_wikipedia_articles(urls):
+    client = _get_aylien_client()
     wikipedia_articles = list()
     for url in urls:
         wikipedia_article_body = _strip_wikipedia_citations(\

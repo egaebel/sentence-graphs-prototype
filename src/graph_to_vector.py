@@ -3,6 +3,8 @@ from sentence_graph import SentenceGraph
 from scipy import optimize
 import numpy as np
 
+from functools import partial
+import itertools
 import random
 
 INFINITY = np.iinfo(np.int32).max

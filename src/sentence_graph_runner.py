@@ -14,6 +14,7 @@ from sentence_graph_statistics import similarity_test
 from sentence_graph_statistics import statistics_experiments
 from vector_visualizations import plot_3d_vectors
 from wikipedia_client import scrape_wikipedia
+from wikipedia_client import scrape_wikipedia_articles
 from wiktionary_client import clear_wiktionary_file_locks
 from wiktionary_client import WiktionaryClient
 
@@ -39,7 +40,6 @@ shared_sentence_graph_count = manager.Value('L', 0)
 shared_sentence_graphs_list = manager.list()
 
 shared_basis_sentence_graphs_list = manager.list()
-shared_dissimilarity_vectors_list = manager.list()
 ###################################################################################################
 
 def print_reduction_statistics(
@@ -134,17 +134,27 @@ def sentence_graph_creation_func(sentence):
 
 def sentence_graph_to_dissimilarity_vector_func(sentence_graph):
     global shared_basis_sentence_graphs_list
-    global shared_dissimilarity_vectors_list
 
+    print("Running on sentence_graph: %s" % sentence_graph.get_sentence())
+    print("shared_basis_sentence_graphs_list: %s" % str(shared_basis_sentence_graphs_list))
     dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, shared_basis_sentence_graphs_list)
-    shared_dissimilarity_vectors_list.append(dissimilarity_vector)
     print("For sentence: %s\nDissimilarity vector: %s\n" % (sentence_graph.get_sentence(), dissimilarity_vector))
+    return dissimilarity_vector
 
-def run_svm(vectors):
-    pass
+def sentence_graphs_to_dissimilarity_vectors_func(sentence_graphs, basis_sentence_graphs):
+    print("Dissimilarity vector sentences: ")
+    for basis_sentence_graph in basis_sentence_graphs:
+        print("%s" % basis_sentence_graph.get_sentence())
+    dissimilarity_vectors = list()
+    for sentence_graph in sentence_graphs:
+        dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, basis_sentence_graphs)
+        dissimilarity_vectors.append(dissimilarity_vector)
+        print("For sentence: %s\nDissimilarity vector: %s\n" % (sentence_graph.get_sentence(), dissimilarity_vector))
+    return dissimilarity_vectors    
 
 def test():
     global DEBUG_restart_sentence_index
+    global shared_basis_sentence_graphs_list
 
     clear_wiktionary_file_locks()
     
@@ -201,6 +211,7 @@ def test():
     print("Created %d sentence graphs total" % len(all_sentence_graphs))
 
     basis_sentence_graphs, basis_sentence_graph_indices = select_prototype_graphs(all_sentence_graphs, dimensions)
+    shared_basis_sentence_graphs_list.extend(basis_sentence_graphs)
     # Remove the sentence graphs that are being used as a basis.
     # Sort the indices in reverse so we remove from the highest indices down to the lowest
     # thus preserving the validity of the remaining indices
@@ -211,90 +222,10 @@ def test():
           % (len(all_sentence_graphs), len(basis_sentence_graphs)))
     print("\n\n")
 
-    """
-    dissimilarity_vectors = list()
-    for sentence_graph in all_sentence_graphs:
-        dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, basis_sentence_graphs)
-        dissimilarity_vectors.append(dissimilarity_vector)
-        print("For sentence: %s\nDissimilarity vector: %s\n" % (sentence_graph.get_sentence(), dissimilarity_vector))
-    """
-    pool.map(sentence_graph_to_dissimilarity_vector_func, all_sentence_graphs, 1)
-
+    dissimilarity_vectors_list = pool.map(sentence_graph_to_dissimilarity_vector_func, all_sentence_graphs, 1)
 
     print("\n Basis sentences: %s" % '\n'.join([sentence_graph.get_sentence() for sentence_graph in basis_sentence_graphs]))
-    plot_3d_vectors(shared_dissimilarity_vectors_list, show_figure=True)
-    #"""
-
-    # Graph dissimilarity measures
-    """
-    basis_sentences = [
-        "What is this absolute and total nonsense",
-        "Algorithms are difficult to devise",
-        "Reptiles are by far the strangest creatures"]
-
-    sentences = [
-        "I attended a fantastic college", 
-        "I went to a great university", 
-        "I attended a horrible college", 
-        "I went to the worst university", ]
-
-    basis_sentence_graphs = pool.map(sentence_graph_creation_func, basis_sentences, 1)
-    sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
-
-    for sentence_graph in sentence_graphs:
-        print("Calculating embedding for sentence: %s" % sentence_graph.get_sentence())
-        dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, basis_sentence_graphs)
-        print("Dissimilarity embedding vector: %s\n" % ', '.join([str(value) for value in dissimilarity_vector]))
-    #"""
-
-    # Graph edit distance tests
-    """
-    sentences = [
-        "I attended a fantastic college", 
-        "I went to a great university", 
-        "I attended a horrible college", 
-        "I went to the worst university", ]
-    sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
-
-    print("Computing graph edit distance between all the sentence graphs!")
-    all_sentence_pairs = dict()
-    for sentence_graph1 in sentence_graphs:
-        for sentence_graph2 in sentence_graphs:
-            key = ''.join(sorted([sentence_graph1.get_sentence(), sentence_graph2.get_sentence()]))
-            all_sentence_pairs[key] = (sentence_graph1, sentence_graph2)
-    for sentence_pair in all_sentence_pairs:
-        sentence_graph1 = all_sentence_pairs[sentence_pair][0]
-        sentence_graph2 = all_sentence_pairs[sentence_pair][1]
-        if sentence_graph1.get_sentence() != sentence_graph2.get_sentence():
-            print("Graph edit distance between sentences: \n|%s|\nAND\n|%s|\n" 
-                % (sentence_graph1.get_sentence(), sentence_graph2.get_sentence()))
-            graph_edit_distance = approximate_sentence_graph_edit_distance(sentence_graph1, sentence_graph2)
-            print("Graph edit distance: %d\n\n" % graph_edit_distance)
-    """
-
-    # Wikipedia random access sentence_graphs testing
-    """
-    wikipedia_articles = scrape_wikipedia(randomize=True, page_limit=3)
-    for wikipedia_article in wikipedia_articles:
-
-        print("Wikipedia_article['body']: %s\n" % wikipedia_article["body"][:75])
-
-        sentences = wikipedia_article["body"].split('.')
-        sentences = filter(lambda x: x.strip() != '', sentences)
-
-        sentence_graphs = pool.map(sentence_graph_creation_func, sentences, 1)
-
-        wikipedia_article["sentence_graphs"] = sentence_graphs
-
-        print("Processed %s sentences" % str(shared_sentence_graph_count))
-        shared_sentence_graph_count.set(0)
-        print("\n\n\n")
-
-        for sentence_graph in sentence_graphs:
-            save_sentence_graph_to_file(
-                sentence_graph, 
-                sentence_graph_file_path_from_sentence(sentence_graph.get_sentence()))
-
+    plot_3d_vectors(dissimilarity_vectors_list, show_figure=True)
     #"""
 
     # Corex testing
