@@ -5,6 +5,7 @@ from sentence_graph import SentenceGraph
 from sentence_graph_construction import get_text_sentence_graphs
 from sentence_graph_construction import build_deep_sentence_graph
 from sentence_graph_reduction import reduce_sentence_graphs
+from sentence_graph_io import graphviz_sentence_graph_draw
 from sentence_graph_io import load_sentence_graph_from_file
 from sentence_graph_io import sentence_graph_draw
 from sentence_graph_io import sentence_graph_file_path_from_sentence
@@ -52,35 +53,79 @@ def print_reduction_statistics(
 
 
 def combine_sentence_graphs(sentence_graphs, directed=True):
-    combined_sentence_graph = SentenceGraph(None, directed)
+    body_of_text = '. '.join([x.get_sentence() for x in sentence_graphs])
+    combined_sentence_graph = SentenceGraph(body_of_text, directed)
     
+    print("Iterating over %d sentence graphs" % len(sentence_graphs))
+    sentence_graph_count = 0
+    prev_sentence_last_word_vertex = None
     for sentence_graph in sentence_graphs:
 
+        # TODO: Make this actually be the last word of the sentence
+        # Right now it is just whatever vertex is returned last by the iterator, which is arbitrary
+        # with respect to the original sentence ordering
+        # In general sentence order should be preserved in sentence graphs as well as parse tree info
+        last_word_in_sentence = None
         for vertex in sentence_graph.get_vertices_iterator():
             vertex_word_pos_tuple = sentence_graph.get_word_pos_tuple(vertex)
             if not combined_sentence_graph.contains(vertex_word_pos_tuple[0], vertex_word_pos_tuple[1]):
-                combined_sentence_graph.add_vertex(vertex_word_pos_tuple[0], vertex_word_pos_tuple[1])
+                last_word_in_sentence = combined_sentence_graph.add_vertex(vertex_word_pos_tuple[0], vertex_word_pos_tuple[1])
+            else:
+                last_word_in_sentence = combined_sentence_graph.get_vertex(vertex_word_pos_tuple[0], vertex_word_pos_tuple[1])
+
+        if prev_sentence_last_word_vertex is not None:
+            combined_sentence_graph.add_inter_sentence_edge(prev_sentence_last_word_vertex, last_word_in_sentence)
+        prev_sentence_last_word_vertex = last_word_in_sentence
 
         sentence_edge_properties = sentence_graph.get_sentence_edge_properties()
         definition_edge_properties = sentence_graph.get_definition_edge_properties()
+        inter_sentence_edge_properties = sentence_graph.get_inter_sentence_edge_properties()
+        print("Iterating over %d edges" % len(sentence_graph.get_edges()))
+        edge_count = 0
         for edge in sentence_graph.get_edges_iterator():
             source_vertex_pos_tuple = sentence_graph.get_word_pos_tuple(edge.source())
             target_vertex_pos_tuple = sentence_graph.get_word_pos_tuple(edge.target())
-            if sentence_edge_properties[edge] is not None:
+            if sentence_edge_properties[edge] != '':
+                print("Adding sentence edge from words: ((%s, %s) (%s, %s))"
+                    % (source_vertex_pos_tuple[0], 
+                    source_vertex_pos_tuple[1], 
+                    target_vertex_pos_tuple[0], 
+                    target_vertex_pos_tuple[1]))
                 combined_sentence_graph.add_sentence_edge_from_words(
                     source_vertex_pos_tuple[0], 
                     source_vertex_pos_tuple[1], 
                     target_vertex_pos_tuple[0], 
                     target_vertex_pos_tuple[1])
-            elif definition_edge_properties[edge] is not None:
+            elif definition_edge_properties != '':
+                print("Adding definition edge from words: ((%s, %s) (%s, %s))"
+                    % (source_vertex_pos_tuple[0], 
+                    source_vertex_pos_tuple[1], 
+                    target_vertex_pos_tuple[0], 
+                    target_vertex_pos_tuple[1]))
                 combined_sentence_graph.add_definition_edge_from_words(
+                    source_vertex_pos_tuple[0], 
+                    source_vertex_pos_tuple[1], 
+                    target_vertex_pos_tuple[0], 
+                    target_vertex_pos_tuple[1])
+            elif inter_sentence_edge_properties[edge] != '':
+                print("Adding inter sentence edge from words: ((%s, %s) (%s, %s))"
+                    % (source_vertex_pos_tuple[0], 
+                    source_vertex_pos_tuple[1], 
+                    target_vertex_pos_tuple[0], 
+                    target_vertex_pos_tuple[1]))
+                combined_sentence_graph.add_inter_sentence_edge_from_words(
                     source_vertex_pos_tuple[0], 
                     source_vertex_pos_tuple[1], 
                     target_vertex_pos_tuple[0], 
                     target_vertex_pos_tuple[1])
             else:
                 print("Error, edge %s not found in definition or sentence properties" % edge)
+            edge_count += 1
+            print("Edge count: %d" % edge_count)
 
+        sentence_graph_count += 1
+        print("Sentence graph count: %d" % sentence_graph_count)
+    print("Finished combining %d sentence graphs!" % len(sentence_graphs))
     return combined_sentence_graph
 
 def sentence_graph_creation_func(sentence):
@@ -121,14 +166,13 @@ def sentence_graph_creation_func(sentence):
             sentence_graph, 
             sentence_graph_file_path_from_sentence("depth=" + str(depth) + "--" + sentence))
 
-    """
+    #"""
     sentence_graph_draw(
         sentence_graph,
         sentence,
         output_folder_name="sentence-graphs-visualization/",
-        output_file_name="reductions-test--%s----PRE_REDUCTION.png"\
-            % sentence.replace(" ", "-"))
-    """
+        output_file_name=sentence.strip().replace(" ", "-"))
+    #"""
 
     return sentence_graph
 
@@ -136,7 +180,7 @@ def sentence_graph_to_dissimilarity_vector_func(sentence_graph):
     global shared_basis_sentence_graphs_list
 
     print("Running on sentence_graph: %s" % sentence_graph.get_sentence())
-    print("shared_basis_sentence_graphs_list: %s" % str(shared_basis_sentence_graphs_list))
+    print("shared_basis_sentences: %s" % '\n'.join([x.get_sentence() for x in shared_basis_sentence_graphs_list]))
     dissimilarity_vector = sentence_graph_dissimilarity_embedding(sentence_graph, shared_basis_sentence_graphs_list)
     print("For sentence: %s\nDissimilarity vector: %s\n" % (sentence_graph.get_sentence(), dissimilarity_vector))
     return dissimilarity_vector
@@ -153,6 +197,18 @@ def sentence_graphs_to_dissimilarity_vectors_func(sentence_graphs, basis_sentenc
     return dissimilarity_vectors    
 
 def test():
+    #"""
+    print("Loading sentence graph from file.....")
+    sentence_graph = load_sentence_graph_from_file("sentence-graphs-storage/Minimum_description_length.gt", "Minimum Description Length")
+    print("Finished loading sentence graph from file!")
+    print("Drawing sentence graph.......")
+    sentence_graph_draw(
+            sentence_graph, 
+            "Minimum desription length wikipedia page",
+            output_file_name="Minimum-description-length-wiki-page")
+    print("Done.")
+    return 
+    #"""
     global DEBUG_restart_sentence_index
     global shared_basis_sentence_graphs_list
 
@@ -189,7 +245,7 @@ def test():
     wikipedia_articles = scrape_wikipedia_articles(wikipedia_urls)
     for wikipedia_article in wikipedia_articles:
 
-        print("Wikipedia_article['body']: %s\n" % wikipedia_article["body"][:75])
+        print("Wikipedia_article['body']: %s\n" % wikipedia_article["body"])
 
         sentences = wikipedia_article["body"].split('.')
         sentences = filter(lambda x: x.strip() != '', sentences)
@@ -204,12 +260,30 @@ def test():
         shared_sentence_graph_count.set(0)
         print("\n\n\n")
 
-        for sentence_graph in wiki_page_sentence_graphs:
-            save_sentence_graph_to_file(
-                sentence_graph, 
-                sentence_graph_file_path_from_sentence(sentence_graph.get_sentence()))
+        combined_sentence_graph = combine_sentence_graphs(all_sentence_graphs)
+        sys.stdout.flush()
+
+        print("Saving combined sentence graph to file.......")
+        sys.stdout.flush()
+        save_sentence_graph_to_file(
+                combined_sentence_graph, 
+                sentence_graph_file_path_from_sentence("Minimum_description_length"))
+        print("Saved sentence graph to file!")
+        sys.stdout.flush()
+
+        print("Drawing combined sentence graph.......")
+        sys.stdout.flush()
+        sentence_graph_draw(
+            combined_sentence_graph, 
+            "Minimum desription length wikipedia page--truncated-debugging",
+            output_file_name="Minimum-description-length-wiki-page")
+        print("Drew sentence graph!")
+        sys.stdout.flush()
     print("Created %d sentence graphs total" % len(all_sentence_graphs))
 
+    print("Total edge count: %d" % combined_sentence_graph.get_graph().num_edges())
+
+    """
     basis_sentence_graphs, basis_sentence_graph_indices = select_prototype_graphs(all_sentence_graphs, dimensions)
     shared_basis_sentence_graphs_list.extend(basis_sentence_graphs)
     # Remove the sentence graphs that are being used as a basis.
@@ -226,7 +300,7 @@ def test():
 
     print("\n Basis sentences: %s" % '\n'.join([sentence_graph.get_sentence() for sentence_graph in basis_sentence_graphs]))
     plot_3d_vectors(dissimilarity_vectors_list, show_figure=True)
-    #"""
+    """
 
     # Corex testing
     """

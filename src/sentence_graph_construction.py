@@ -96,6 +96,7 @@ def build_deep_sentence_graph(
         use_definition_cache)
 
     for word_vertex in first_sentence_vertices:
+        # RED
         sentence_graph.set_vertex_color(word_vertex, color=[1, 0, 0, 1])
 
     return sentence_graph
@@ -124,6 +125,7 @@ def _build_deep_sentence_graph_helper(
             "\n\nERROR: sentence_parse_tree from parse_sentence is None for"
             " sentence:\n %s\n\n" % sentence)
         return []
+    print("DEBUG***** Finished parseing sentence into parse tree")
 
     prev_word_vertex = None
     for parse_node in sentence_parse_tree.to_sentence_order():
@@ -143,7 +145,7 @@ def _build_deep_sentence_graph_helper(
             word_pos_to_vertex_index_mapping[word_pos_tuple] =\
                 sentence_graph.get_vertex_index(word_vertex)
 
-            if depth != 0:
+            if depth > 0:
                 # Get definition, add pointer from word to all words in definition
                 definition = definition_client.lookup_definition(
                     word, part_of_speech, use_cache=use_definition_cache)

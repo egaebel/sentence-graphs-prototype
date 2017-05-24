@@ -1,9 +1,46 @@
+from graph_tool.all import cairo_draw
 from graph_tool.all import graph_draw
+from graph_tool.all import graphviz_draw
 from graph_tool.all import load_graph
 
 from sentence_graph import SentenceGraph
 
 import os.path
+
+def cairo_sentence_graph_draw(
+        sentence_graph, 
+        sentence,
+        output_folder_name="sentence-graphs-visualization",
+        output_file_name="sentence-graph-debug",
+        file_extension=".png",
+        base_vertex_size=25,
+        base_vertex_font_size=25):
+    output_file_name = output_file_name.replace("/", "-slash-")
+    output_file_path = os.path.join(output_folder_name, output_file_name)
+    shortened_output_file_path = output_file_path[:252]
+
+def graphviz_sentence_graph_draw(
+        sentence_graph, 
+        sentence,
+        output_folder_name="sentence-graphs-visualization",
+        output_file_name="sentence-graph-debug",
+        file_extension=".png",
+        base_vertex_size=25,
+        base_vertex_font_size=25):
+    output_file_name = output_file_name.replace("/", "-slash-")
+    output_file_path = os.path.join(output_folder_name, output_file_name)
+    shortened_output_file_path = output_file_path[:252]
+
+    graphviz_draw(
+        sentence_graph.get_graph(), 
+        size=(50000, 50000), 
+        output=shortened_output_file_path + "--graphviz" + file_extension,
+        #vertex_text=sentence_graph.get_word_vertex_properties(), 
+        vsize=base_vertex_size,
+        #vertex_font_size=base_vertex_font_size,#vertex_font_size_property_map,
+        output_format='png')#,
+        #vcolor=sentence_graph.get_color_vertex_properties(),
+        #ecolor=sentence_graph.get_color_edge_properties())    
 
 # Draw the passed in sentence graph # TODO: make this comment more descriptive
 def sentence_graph_draw(
@@ -11,12 +48,15 @@ def sentence_graph_draw(
         sentence,
         output_folder_name="sentence-graphs-visualization",
         output_file_name="sentence-graph-debug",
-        file_extension=".png"):
-    base_vertex_font_size = 20#128
-    base_vertex_size = 100#200
+        file_extension=".png",
+        base_vertex_size=25,
+        base_vertex_font_size=25):
+    #base_vertex_font_size = 20#128
+    #base_vertex_size = 100#200
     if len(sentence_graph.get_vertices()) == 0:
         print("Empty sentence graph received, cannot draw, returning....")
         return
+    """
     # Out_degree counts all edges when a graph is undirected
     max_out_degree = max(map(lambda v: v.out_degree(), sentence_graph.get_vertices()))
     font_size_func =\
@@ -31,6 +71,7 @@ def sentence_graph_draw(
         vertex_size_property_map[key] =\
             base_vertex_size *\
                 (vertex_size_property_map[key] / max(1, max_out_degree))
+    """
 
     output_file_name = output_file_name.replace("/", "-slash-")
     output_file_path = os.path.join(output_folder_name, output_file_name)
@@ -38,11 +79,13 @@ def sentence_graph_draw(
 
     graph_draw(
         sentence_graph.get_graph(), 
+        output_size=(30000, 30000), 
+        output=shortened_output_file_path + file_extension,
         vertex_text=sentence_graph.get_word_vertex_properties(), 
-        vertex_font_size=vertex_font_size_property_map,
+        vertex_size=base_vertex_size,
+        vertex_font_size=base_vertex_font_size,#vertex_font_size_property_map,
         vertex_fill_color=sentence_graph.get_color_vertex_properties(),
-        output_size=(20000, 20000), 
-        output=shortened_output_file_path + file_extension)
+        edge_color=sentence_graph.get_color_edge_properties())
     
 def sentence_graph_file_path_from_sentence(
     sentence, 

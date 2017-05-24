@@ -38,7 +38,7 @@ def scrape_wikipedia(
         print("\n\n\n")
         wikipedia_article_body = _strip_wikipedia_citations(\
             _get_article_text(client, url))
-        print("Scraped article body: %s" % wikipedia_article_body[:100])
+        print("Scraped article body: %s" % wikipedia_article_body.encode('utf-8'))
         print("\n")
         wikipedia_article_dict = {
             'url': url, 
@@ -59,6 +59,7 @@ def scrape_wikipedia_articles(urls):
     for url in urls:
         wikipedia_article_body = _strip_wikipedia_citations(\
             _get_article_text(client, url))
+        print("Type of body: %s" % type(wikipedia_article_body))
         print("Scraped article body: %s" % wikipedia_article_body[:100])
         print("\n")
         wikipedia_article_dict = {
@@ -87,6 +88,7 @@ def _get_article_text(client, url):
     print("Scraping wikipedia url: || %s ||" % url)
     extracted_results = client.Extract(url)
     print("Extracted results: %s" % extracted_results)
+    print("Type of body: %s" % type(extracted_results["article"]))
     return extracted_results["article"]
 
 def _get_aylien_client(
