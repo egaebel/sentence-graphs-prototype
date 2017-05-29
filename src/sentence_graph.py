@@ -54,6 +54,7 @@ class SentenceGraph():
         self.sentence_graph.edge_properties[INTER_SENTENCE_EDGE_KEY] = inter_sentence_edge_property
         self.sentence_graph.edge_properties[EDGE_COLOR_KEY] = edge_color_property
 
+        # Edge filter properties
         definition_edge_filter_property = self.sentence_graph.new_edge_property("bool")
         inter_sentence_edge_filter_property = self.sentence_graph.new_edge_property("bool")
         parsed_dependencies_edge_filter_property = self.sentence_graph.new_edge_property("bool")

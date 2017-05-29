@@ -19,15 +19,27 @@ from wikipedia_client import scrape_wikipedia_articles
 from wiktionary_client import clear_wiktionary_file_locks
 from wiktionary_client import WiktionaryClient
 
+from graph_tool import topology
+
 from multiprocessing import cpu_count
 from multiprocessing import Lock
 from multiprocessing import Manager
 from multiprocessing import Pool
+
+from numpy import linalg
+
+import cProfile
 import sys
 
 # Corex imports
 sys.path.insert(1, "../../corex/CorEx")
 from corex import Corex
+
+# STS Dataset imports
+sys.path.insert(1, "../../sentence-similarity-datasets/sts-2014")
+from sts_loader import get_sts_dataset_names
+from sts_loader import load_sts_dataset
+from sts_loader import StsDatasetItem
 
 DEBUG_restart_sentence_index = 0
 
@@ -133,7 +145,10 @@ def sentence_graph_creation_func(sentence):
     global shared_sentence_graphs_list
     global shared_sentence_graph_count
 
-    print("Creating sentence graph for sentence: %s" % sentence)
+    sentence = sentence.replace("\\n", "")
+
+    print("Creating sentence graph for sentence: ||%s||" % sentence)
+    sys.stdout.flush()
     depth = 2
     directed = True
     use_sentence_graph_cache = True
@@ -166,12 +181,43 @@ def sentence_graph_creation_func(sentence):
             sentence_graph, 
             sentence_graph_file_path_from_sentence("depth=" + str(depth) + "--" + sentence))
 
-    #"""
+    """
+    # Apparently this causes a race. Don't uncomment this.
+    print("Drawing sentence graph!")
+    sys.stdout.flush()
     sentence_graph_draw(
         sentence_graph,
         sentence,
         output_folder_name="sentence-graphs-visualization/",
         output_file_name=sentence.strip().replace(" ", "-"))
+    print("Drew sentence graph!")
+    sys.stdout.flush()
+    
+    print("Drawing sentence graph.......")
+    sys.stdout.flush()
+    sentence_graph_draw(
+        sentence_graph,
+        sentence,
+        output_folder_name="sentence-graphs-visualization/",
+        output_file_name=sentence.strip().replace(" ", "-"))
+    print("Drew sentence graph!")
+    sys.stdout.flush()
+
+    print("Running kcore decomposition")
+    graph = sentence_graph.get_graph()
+    kcore_property_map = topology.kcore_decomposition(graph)
+    sys.stdout.flush()
+    print("Drawing kcore decomposition.......")
+    graph_draw(
+        graph, 
+        output_size=(30000, 30000), 
+        output=sentence.strip().replace(" ", "-") + "--kcore.png",
+        vertex_text=sentence_graph.get_word_vertex_properties(), 
+        vertex_size=25,
+        vertex_font_size=25,
+        vertex_fill_color=kcore,
+        edge_color=sentence_graph.get_color_edge_properties())
+    print("Drew kcore decomposition!")
     #"""
 
     return sentence_graph
@@ -197,7 +243,7 @@ def sentence_graphs_to_dissimilarity_vectors_func(sentence_graphs, basis_sentenc
     return dissimilarity_vectors    
 
 def test():
-    #"""
+    """
     print("Loading sentence graph from file.....")
     sentence_graph = load_sentence_graph_from_file("sentence-graphs-storage/Minimum_description_length.gt", "Minimum Description Length")
     print("Finished loading sentence graph from file!")
@@ -246,9 +292,10 @@ def test():
     for wikipedia_article in wikipedia_articles:
 
         print("Wikipedia_article['body']: %s\n" % wikipedia_article["body"])
+        print("-------------------------------END WIKIPEDIA ARTICLE BODY---------------------------------")
 
         sentences = wikipedia_article["body"].split('.')
-        sentences = filter(lambda x: x.strip() != '', sentences)
+        sentences = filter(lambda x: not x.isspace(), sentences)
         if len(sentences) <= dimensions:
             continue
 
@@ -256,12 +303,41 @@ def test():
         wikipedia_article["sentence_graphs"] = wiki_page_sentence_graphs
         all_sentence_graphs += wiki_page_sentence_graphs
 
+        """
+        for wiki_page_sentence_graph, wiki_page_sentence in zip(wiki_page_sentence_graphs, sentences):
+            print("Drawing sentence graph.......")
+            sys.stdout.flush()
+            sentence_graph_draw(
+                wiki_page_sentence_graph,
+                wiki_page_sentence,
+                output_folder_name="sentence-graphs-visualization/",
+                output_file_name=wiki_page_sentence.strip().replace(" ", "-"))
+            print("Drew sentence graph!")
+            sys.stdout.flush()
+
+            print("Running kcore decomposition")
+            graph = wiki_page_sentence_graph.get_graph()
+            kcore_property_map = topology.kcore_decomposition(graph)
+            sys.stdout.flush()
+            print("Drawing kcore decomposition.......")
+            graph_draw(
+                graph, 
+                output_size=(30000, 30000), 
+                output=wiki_page_sentence.strip().replace(" ", "-") + "--kcore.png",
+                vertex_text=wiki_page_sentence_graph.get_word_vertex_properties(), 
+                vertex_size=25,
+                vertex_font_size=25,
+                vertex_fill_color=kcore,
+                edge_color=wiki_page_sentence_graph.get_color_edge_properties())
+            print("Drew kcore decomposition!")
+        """
         print("Processed %s sentences" % str(shared_sentence_graph_count))
         shared_sentence_graph_count.set(0)
         print("\n\n\n")
 
+        """
+        # Combine sentence graphs
         combined_sentence_graph = combine_sentence_graphs(all_sentence_graphs)
-        sys.stdout.flush()
 
         print("Saving combined sentence graph to file.......")
         sys.stdout.flush()
@@ -279,11 +355,12 @@ def test():
             output_file_name="Minimum-description-length-wiki-page")
         print("Drew sentence graph!")
         sys.stdout.flush()
+        """
+    sys.stdout.flush()
     print("Created %d sentence graphs total" % len(all_sentence_graphs))
 
-    print("Total edge count: %d" % combined_sentence_graph.get_graph().num_edges())
-
     """
+    print("Selecting prototype graphs.......")
     basis_sentence_graphs, basis_sentence_graph_indices = select_prototype_graphs(all_sentence_graphs, dimensions)
     shared_basis_sentence_graphs_list.extend(basis_sentence_graphs)
     # Remove the sentence graphs that are being used as a basis.
@@ -291,16 +368,16 @@ def test():
     # thus preserving the validity of the remaining indices
     for index in sorted(basis_sentence_graph_indices, reverse=True):
         all_sentence_graphs.pop(index)
+    print("Prototype graphs selected!")
 
     print("Computing dissimilarity vectors for %d sentence graphs using %d prototype sentence graphs" 
           % (len(all_sentence_graphs), len(basis_sentence_graphs)))
-    print("\n\n")
-
+    sys.stdout.flush()
     dissimilarity_vectors_list = pool.map(sentence_graph_to_dissimilarity_vector_func, all_sentence_graphs, 1)
 
     print("\n Basis sentences: %s" % '\n'.join([sentence_graph.get_sentence() for sentence_graph in basis_sentence_graphs]))
-    plot_3d_vectors(dissimilarity_vectors_list, show_figure=True)
-    """
+    plot_3d_vectors(dissimilarity_vectors_list, labels=sentences, show_figure=True)
+    #"""
 
     # Corex testing
     """
@@ -322,6 +399,58 @@ def test():
 
     pool.close()
 
+sentence_graph1 = None
+sentence_graph2 = None
+prototype_sentence_graphs = None
+
+def sts_dataset_test():
+    global sentence_graph1
+    global sentence_graph2
+    global prototype_sentence_graphs
+    prototype_sentences = [
+        "Jack Johnson said the sky is flurescent yellow",
+        #"The intrinsic complexity of this sentence is inherent once you read it twice",
+        #"Curiosity is the greatest invention that mankind has ever produced",
+        #"America is surely the greatest country that has ever existed",
+        #"It will be wonderful if these sentences actually produce something useful"
+    ]
+    prototype_sentence_graphs = list()
+    for prototype_sentence in prototype_sentences:
+        prototype_sentence_graphs.append(
+            sentence_graph_creation_func(prototype_sentence))
+
+    sts_root_path = "../../sentence-similarity-datasets/sts-2014/sts-en-trial-2014"
+    for sts_dataset_name in [get_sts_dataset_names()[0]]:
+        print("Running on dataset named: %s" % sts_dataset_name)
+        sts_dataset = load_sts_dataset(sts_root_path, sts_dataset_name)
+        for sts_item in sts_dataset:
+            sentence_graph1 = sentence_graph_creation_func(sts_item.sentence1)
+            sentence_graph2 = sentence_graph_creation_func(sts_item.sentence2)
+
+            cProfile.run("sentence_graphs_to_dissimilarity_vectors_func("\
+                "[sentence_graph1],"\
+                "prototype_sentence_graphs)")
+            """
+            dissimilarity_vectors = sentence_graphs_to_dissimilarity_vectors_func(
+                [sentence_graph1, sentence_graph2], 
+                prototype_sentence_graphs)
+            """
+            print("For sentence1: %s\n and sentence2:%s\n"
+                "the dissimilarity vectors are:\n%s\nand\n%s\n"
+                "With a distance of:\n%s\n"
+                "The expected output (1-5) is:%s\n"
+                "The gold standard (1-5) is:%s\n",
+                (sts_item.sentence1, 
+                sts_item.sentence2, 
+                dissimilarity_vectors[0], 
+                dissimilarity_vectors[1], 
+                linalg.norm(dissimilarity_vectors[0] - dissimilarity_vectors[1])),
+                sts_item.output_similarity,
+                sts_item.gold_standard_score)
+            return
+
+
 
 if __name__ == '__main__':
-    test()
+    #test()
+    sts_dataset_test()

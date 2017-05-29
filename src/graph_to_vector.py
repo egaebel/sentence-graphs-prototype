@@ -1,12 +1,13 @@
+from functools import partial
+from scipy import optimize
 from sentence_graph import SentenceGraph
 
-from scipy import optimize
-import numpy as np
-
-from functools import partial
 import itertools
+import numpy as np
 import random
+import sys
 
+# Constants
 INFINITY = np.iinfo(np.int32).max
 DUMMY_VERTEX_VALUE = "___"
 
@@ -19,6 +20,11 @@ EDGE_COST_MULTIPLIER = 1
 COST_EDGE_REPLACEMENT = 2 * EDGE_COST_MULTIPLIER
 COST_EDGE_INSERTION = 1 * EDGE_COST_MULTIPLIER
 COST_EDGE_DELETION = 1 * EDGE_COST_MULTIPLIER
+
+# Global Variables
+word_pos_tuple_to_vertex = dict()
+vertex_adjacent_word_pos_tuples = dict()
+
 
 def astar_sentence_graph_edit_distance(graph1, graph2):
     pass
@@ -41,7 +47,7 @@ def _sentence_graph_vertex_cost(
     the cost matrix.
 
     Cost matrix structure:
-    TODO
+    TODO (finish docs)
     """
     N = len(sentence_graph1_word_pos_tuples)
     M = len(sentence_graph2_word_pos_tuples)
@@ -75,20 +81,38 @@ def _sentence_graph_compute_edge_cost(
     M_nodes = len(sentence_graph2_word_pos_tuples)
 
     if i < N_nodes:
-        vertex1 = sentence_graph1.get_vertex(
-            sentence_graph1_word_pos_tuples[i][0], sentence_graph1_word_pos_tuples[i][1])
-        neighbor_word_pos_tuples1 =\
-            sentence_graph1.get_vertex_out_neighbor_word_pos_tuples(vertex1)\
-            + sentence_graph1.get_vertex_in_neighbor_word_pos_tuples(vertex1)
-        neighbor_word_pos_tuples1 = sorted(neighbor_word_pos_tuples1, key=lambda x: x[0] + x[1])
+        word_pos_tuple1 = (sentence_graph1_word_pos_tuples[i][0], sentence_graph1_word_pos_tuples[i][1])
+        if word_pos_tuple1 in word_pos_tuple_to_vertex:
+            vertex1 = word_pos_tuple_to_vertex[word_pos_tuple1]
+        else:
+            vertex1 = sentence_graph1.get_vertex(
+                sentence_graph1_word_pos_tuples[i][0], sentence_graph1_word_pos_tuples[i][1])
+            word_pos_tuple_to_vertex[word_pos_tuple1] = vertex1
+        if vertex1 in vertex_adjacent_word_pos_tuples:
+            neighbor_word_pos_tuples1 = vertex_adjacent_word_pos_tuples[vertex1]
+        else:
+            neighbor_word_pos_tuples1 =\
+                sentence_graph1.get_vertex_out_neighbor_word_pos_tuples(vertex1)\
+                + sentence_graph1.get_vertex_in_neighbor_word_pos_tuples(vertex1)
+            neighbor_word_pos_tuples1 = sorted(neighbor_word_pos_tuples1, key=lambda x: x[0] + x[1])
+            vertex_adjacent_word_pos_tuples[vertex1] = neighbor_word_pos_tuples1
 
     if j < M_nodes:
-        vertex2 = sentence_graph2.get_vertex(
-            sentence_graph2_word_pos_tuples[j][0], sentence_graph2_word_pos_tuples[j][1])
-        neighbor_word_pos_tuples2 =\
-            sentence_graph2.get_vertex_out_neighbor_word_pos_tuples(vertex2)\
-            + sentence_graph2.get_vertex_in_neighbor_word_pos_tuples(vertex2)
-        neighbor_word_pos_tuples2 = sorted(neighbor_word_pos_tuples2, key=lambda x: x[0] + x[1])
+        word_pos_tuple2 = (sentence_graph2_word_pos_tuples[j][0], sentence_graph2_word_pos_tuples[j][1])
+        if word_pos_tuple2 in word_pos_tuple_to_vertex:
+            vertex2 = word_pos_tuple_to_vertex[word_pos_tuple2]
+        else:
+            vertex2 = sentence_graph2.get_vertex(
+                sentence_graph2_word_pos_tuples[j][0], sentence_graph2_word_pos_tuples[j][1])
+            word_pos_tuple_to_vertex[word_pos_tuple2] = vertex2
+        if vertex2 in vertex_adjacent_word_pos_tuples:
+            neighbor_word_pos_tuples2 = vertex_adjacent_word_pos_tuples[vertex2]
+        else:
+            neighbor_word_pos_tuples2 =\
+                sentence_graph2.get_vertex_out_neighbor_word_pos_tuples(vertex2)\
+                + sentence_graph2.get_vertex_in_neighbor_word_pos_tuples(vertex2)
+            neighbor_word_pos_tuples2 = sorted(neighbor_word_pos_tuples2, key=lambda x: x[0] + x[1])
+            vertex_adjacent_word_pos_tuples[vertex2] = neighbor_word_pos_tuples2
 
     if i >= N_nodes and j >= M_nodes:
         return 0
@@ -169,6 +193,7 @@ def approximate_graph_edit_distance(
 
     # Construct node cost matrix
     print("Constructing cost matrix of size %d....." % N_M)
+    sys.stdout.flush()
     cost_matrix = np.zeros((N_M, N_M))
     for i in range(N_M):
         for j in range(N_M):
@@ -186,12 +211,18 @@ def approximate_graph_edit_distance(
                     sentence_graph2_word_pos_tuples, 
                     i, 
                     j))
+        if i % 10 == 0:
+            print("Row: %d / %d" % (i, N_M))
+            sys.stdout.flush()
     print("Cost matrix constructed!")
+    sys.stdout.flush()
 
     # Run the Hungarian algorithm on cost matrix
     print("Running Hungarian algorithm.....")
+    sys.stdout.flush()
     row_indices, col_indices = optimize.linear_sum_assignment(cost_matrix)
     print("Finished running Hungarian algorithm!")
+    sys.stdout.flush()
 
     # Use resulting cost matrix to determine the graph edit distance
     return cost_matrix[row_indices, col_indices].sum()
