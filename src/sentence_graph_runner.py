@@ -29,6 +29,7 @@ from multiprocessing import Pool
 from numpy import linalg
 
 import cProfile
+import numpy as np
 import sys
 
 # Corex imports
@@ -268,7 +269,7 @@ def test():
     # so that the child processes have access to the sentence_graph_creation_func.
     # This is because the process forks when Pool() is called and if sentence_graph_creation_func
     # has not been defined yet the children will not have a reference to it
-    pool = Pool(8)
+    pool = Pool()
 
     # Wikipedia random access + graph edit distance
     #"""
@@ -403,38 +404,74 @@ sentence_graph1 = None
 sentence_graph2 = None
 prototype_sentence_graphs = None
 
+def sentence_similarity_on_sts_dataset(sts_dataset_name):
+    sts_root_path = "../../sentence-similarity-datasets/sts-2014/sts-en-trial-2014"
+    print("Running on dataset named: %s" % sts_dataset_name)
+    sts_dataset = load_sts_dataset(sts_root_path, sts_dataset_name)
+    for sts_item in sts_dataset:
+        sentence_graph1 = sentence_graph_creation_func(sts_item.sentence1)
+        sentence_graph2 = sentence_graph_creation_func(sts_item.sentence2)
+
+        """
+        cProfile.run("sentence_graphs_to_dissimilarity_vectors_func("\
+            "[sentence_graph1],"\
+            "prototype_sentence_graphs)")
+        #"""
+        dissimilarity_vectors = sentence_graphs_to_dissimilarity_vectors_func(
+            [sentence_graph1, sentence_graph2], 
+            prototype_sentence_graphs)
+        #"""
+        print("For sentence1: %s\n and sentence2:%s\n"
+            "the dissimilarity vectors are:\n%s\nand\n%s\n"
+            "With a distance of:\n%s\n"
+            "The expected output (1-5) is:%s\n"
+            "The gold standard (1-5) is:%s\n",
+            (sts_item.sentence1, 
+            sts_item.sentence2, 
+            dissimilarity_vectors[0], 
+            dissimilarity_vectors[1], 
+            linalg.norm(np.array(dissimilarity_vectors[0]) - np.array(dissimilarity_vectors[1]))),
+            sts_item.output_similarity,
+            sts_item.gold_standard_score)
+    return None
+
 def sts_dataset_test():
     global sentence_graph1
     global sentence_graph2
     global prototype_sentence_graphs
     prototype_sentences = [
         "Jack Johnson said the sky is flurescent yellow",
-        #"The intrinsic complexity of this sentence is inherent once you read it twice",
-        #"Curiosity is the greatest invention that mankind has ever produced",
-        #"America is surely the greatest country that has ever existed",
-        #"It will be wonderful if these sentences actually produce something useful"
+        "The intrinsic complexity of this sentence is inherent once you read it twice",
+        "Curiosity is the greatest invention that mankind has ever produced",
+        "America is surely the greatest country that has ever existed",
+        "It will be wonderful if these sentences actually produce something useful"
     ]
     prototype_sentence_graphs = list()
     for prototype_sentence in prototype_sentences:
         prototype_sentence_graphs.append(
             sentence_graph_creation_func(prototype_sentence))
 
+    pool = Pool()
+
     sts_root_path = "../../sentence-similarity-datasets/sts-2014/sts-en-trial-2014"
-    for sts_dataset_name in [get_sts_dataset_names()[0]]:
+    pool.map(sentence_similarity_on_sts_dataset, get_sts_dataset_names())
+    """
+    for sts_dataset_name in get_sts_dataset_names():
+
         print("Running on dataset named: %s" % sts_dataset_name)
         sts_dataset = load_sts_dataset(sts_root_path, sts_dataset_name)
         for sts_item in sts_dataset:
             sentence_graph1 = sentence_graph_creation_func(sts_item.sentence1)
             sentence_graph2 = sentence_graph_creation_func(sts_item.sentence2)
 
-            cProfile.run("sentence_graphs_to_dissimilarity_vectors_func("\
-                "[sentence_graph1],"\
-                "prototype_sentence_graphs)")
-            """
+            #cProfile.run("sentence_graphs_to_dissimilarity_vectors_func("\
+            #    "[sentence_graph1],"\
+            #    "prototype_sentence_graphs)")
+            
             dissimilarity_vectors = sentence_graphs_to_dissimilarity_vectors_func(
                 [sentence_graph1, sentence_graph2], 
                 prototype_sentence_graphs)
-            """
+            
             print("For sentence1: %s\n and sentence2:%s\n"
                 "the dissimilarity vectors are:\n%s\nand\n%s\n"
                 "With a distance of:\n%s\n"
@@ -447,9 +484,8 @@ def sts_dataset_test():
                 linalg.norm(dissimilarity_vectors[0] - dissimilarity_vectors[1])),
                 sts_item.output_similarity,
                 sts_item.gold_standard_score)
-            return
-
-
+    """
+    pool.close()
 
 if __name__ == '__main__':
     #test()

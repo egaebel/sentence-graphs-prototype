@@ -1,4 +1,5 @@
 from functools import partial
+from multiprocessing import Pool
 from scipy import optimize
 from sentence_graph import SentenceGraph
 
@@ -181,7 +182,14 @@ def approximate_graph_edit_distance(
         sentence_graph2,
         vertex_cost_func=_sentence_graph_vertex_cost,
         compute_edge_cost_func=_sentence_graph_compute_edge_cost):
+    global word_pos_tuple_to_vertex
+    global vertex_adjacent_word_pos_tuples
+    
     print("Approximating graph edit distance....")
+    # Reset result caching
+    word_pos_tuple_to_vertex = dict()
+    vertex_adjacent_word_pos_tuples = dict()
+
     # Copy graphs
     sentence_graph1_copy = sentence_graph1.copy()
     sentence_graph2_copy = sentence_graph2.copy()
@@ -244,8 +252,16 @@ def sentence_graph_dissimilarity_embedding(
         prototype_sentence_graphs, 
         graph_edit_distance_func=approximate_sentence_graph_edit_distance):
     dissimilarity_vector = list()
+    #pool = Pool()
+    #"""
     for prototype_sentence_graph in prototype_sentence_graphs:
         dissimilarity_vector.append(graph_edit_distance_func(sentence_graph, prototype_sentence_graph))
+    #"""
+    """
+    partial_graph_edit_distance_func = partial(graph_edit_distance_func, sentence_graph2=sentence_graph)
+    dissimilarity_vector = pool.map(partial_graph_edit_distance_func, prototype_sentence_graphs)
+    pool.close()
+    """
     return dissimilarity_vector
 
 if __name__ == '__main__':
