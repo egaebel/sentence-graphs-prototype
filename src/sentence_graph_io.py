@@ -49,6 +49,7 @@ def sentence_graph_draw(
         output_folder_name="sentence-graphs-visualization",
         output_file_name="sentence-graph-debug",
         file_extension=".png",
+        kcore=None,
         base_vertex_size=25,
         base_vertex_font_size=25):
     #base_vertex_font_size = 20#128
@@ -79,7 +80,7 @@ def sentence_graph_draw(
 
     graph_draw(
         sentence_graph.get_graph(), 
-        output_size=(30000, 30000), 
+        output_size=(20000, 20000), 
         output=shortened_output_file_path + file_extension,
         vertex_text=sentence_graph.get_word_vertex_properties(), 
         vertex_size=base_vertex_size,
@@ -104,8 +105,11 @@ def load_sentence_graph_from_file(input_file_path, sentence, file_format="gt"):
     try:
         loaded_graph = load_graph(input_file_path, fmt=file_format)
         print("Loaded graph: |%s|" % loaded_graph)
-        if loaded_graph is not None:
+        if loaded_graph is not None and loaded_graph.num_vertices() != 0:
             return SentenceGraph(sentence=sentence, graph=loaded_graph)
+        else:
+            print("ERROR: Sentence graph loaded is: %s and is either None or has 0 vertices!"
+                % load_graph)
     except Exception, e:
         print("ERROR: Cannot load sentence graph in file format: %s from file path: %s,"
             " due to exception:\n%s\nThis is normal if caching is being relied on." 

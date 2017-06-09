@@ -9,15 +9,23 @@ PART_OF_SPEECH_KEY = "part_of_speech"
 VERTEX_COLOR_KEY = "vertex_color"
 
 # Edge Property Keys
+# Edge categories
 DEFINITION_EDGE_KEY = "definition_edge"
 SENTENCE_EDGE_KEY = "sentence_edge"
 PARSED_DEPENDENCIES_EDGE_KEY = "parsed_sentence_dependencies_edge"
 INTER_SENTENCE_EDGE_KEY = "inter_sentence_edge"
+
+# Edge color keys
 EDGE_COLOR_KEY = "edge_color"
 
+# Parsed Dependencies dependency value 
+# i.e. nsubj in: (This, DT) <-- nsubj -- (sentence, NN)
+PARSE_TREE_DEPENDENCY_VALUE_KEY = "parse_tree_dependency_value"
+
+# Edge filter keys
 FILTER_DEFINITION_EDGE_KEY = "definition_edge_filter_key"
 FILTER_INTER_SENTENCE_EDGE_KEY = "inter_sentence_edge_filter_key"
-FILTER_PARSED_DEPENDENCEIS_EDGE_KEY = "parsed_sentence_dependencies_edge_filter_key"
+FILTER_PARSED_DEPENDENCIES_EDGE_KEY = "parsed_sentence_dependencies_edge_filter_key"
 FILTER_SENTENCE_EDGE_KEY = "sentence_edge_filter_key"
 
 class SentenceGraph():
@@ -48,11 +56,13 @@ class SentenceGraph():
         parsed_dependencies_edge_property = self.sentence_graph.new_edge_property("string")
         inter_sentence_edge_property = self.sentence_graph.new_edge_property("string")
         edge_color_property = self.sentence_graph.new_edge_property("vector<double>")
+        dependency_edge_property = self.sentence_graph.new_edge_property("string")
         self.sentence_graph.edge_properties[SENTENCE_EDGE_KEY] = sentence_edge_property
         self.sentence_graph.edge_properties[DEFINITION_EDGE_KEY] = definition_edge_property
         self.sentence_graph.edge_properties[PARSED_DEPENDENCIES_EDGE_KEY] = parsed_dependencies_edge_property
         self.sentence_graph.edge_properties[INTER_SENTENCE_EDGE_KEY] = inter_sentence_edge_property
         self.sentence_graph.edge_properties[EDGE_COLOR_KEY] = edge_color_property
+        self.sentence_graph.edge_properties[PARSE_TREE_DEPENDENCY_VALUE_KEY] = dependency_edge_property
 
         # Edge filter properties
         definition_edge_filter_property = self.sentence_graph.new_edge_property("bool")
@@ -61,7 +71,7 @@ class SentenceGraph():
         sentence_edge_filter_property = self.sentence_graph.new_edge_property("bool")
         self.sentence_graph.edge_properties[FILTER_DEFINITION_EDGE_KEY] = definition_edge_filter_property
         self.sentence_graph.edge_properties[FILTER_INTER_SENTENCE_EDGE_KEY] = inter_sentence_edge_filter_property
-        self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCEIS_EDGE_KEY] = parsed_dependencies_edge_filter_property
+        self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCIES_EDGE_KEY] = parsed_dependencies_edge_filter_property
         self.sentence_graph.edge_properties[FILTER_SENTENCE_EDGE_KEY] = sentence_edge_filter_property
         
 
@@ -95,7 +105,7 @@ class SentenceGraph():
         return self.add_sentence_edge(self.get_vertex(word1, pos1), self.get_vertex(word2, pos2))
 
     def add_sentence_edge(self, word_vertex1, word_vertex2):
-        sentence_edge = self.sentence_graph.add_edge(word_vertex1, word_vertex2)
+        sentence_edge = self.sentence_graph.add_edge(word_vertex1, word_vertex2, add_missing=False)
         self.sentence_graph.edge_properties[SENTENCE_EDGE_KEY][sentence_edge] = sentence_edge
         # Green
         self.sentence_graph.edge_properties[EDGE_COLOR_KEY][sentence_edge] = [0.2, 1, 0.2, 1]
@@ -108,6 +118,23 @@ class SentenceGraph():
         for i in range(1, len(sentence_vertices)):
             self.add_sentence_edge(sentence_vertices[i - 1], sentence_vertices[i])
 
+    def add_parsed_dependency_edge(self, word_vertex1, word_vertex2, dependency_relationship):
+        parsed_dependency_edge = self.sentence_graph.add_edge(word_vertex1, word_vertex2, add_missing=False)
+        self.sentence_graph.edge_properties[PARSED_DEPENDENCIES_EDGE_KEY][parsed_dependency_edge] = parsed_dependency_edge
+        self.sentence_graph.edge_properties[PARSE_TREE_DEPENDENCY_VALUE_KEY][parsed_dependency_edge] = dependency_relationship
+        # Blue
+        self.sentence_graph.edge_properties[EDGE_COLOR_KEY][parsed_dependency_edge] = [0, 0, 1, 1]
+
+        self._set_edge_to_zero_in_all_filters(parsed_dependency_edge)
+        self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCIES_EDGE_KEY][parsed_dependency_edge] = True
+        return parsed_dependency_edge        
+
+    def add_parsed_dependency_edge_from_words(self, word1, pos1, word2, pos2, dependency_relationship):
+        return self.add_parsed_dependency_edge(
+            self.get_vertex(word1, pos1), 
+            self.get_vertex(word2, pos2), 
+            dependency_relationship)
+
     def add_definition_edge_from_words(self, word, pos, definition_word, definition_pos):
         return self.add_definition_edge(
             self.get_vertex(word, pos),
@@ -116,11 +143,11 @@ class SentenceGraph():
     def _set_edge_to_zero_in_all_filters(self, edge):
         self.sentence_graph.edge_properties[FILTER_DEFINITION_EDGE_KEY][edge] = False
         self.sentence_graph.edge_properties[FILTER_INTER_SENTENCE_EDGE_KEY][edge] = False
-        self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCEIS_EDGE_KEY][edge] = False
+        self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCIES_EDGE_KEY][edge] = False
         self.sentence_graph.edge_properties[FILTER_SENTENCE_EDGE_KEY][edge] = False
 
     def add_definition_edge(self, word_vertex, definition_word_vertex):
-        definition_edge = self.sentence_graph.add_edge(word_vertex, definition_word_vertex)
+        definition_edge = self.sentence_graph.add_edge(word_vertex, definition_word_vertex, add_missing=False)
         self.sentence_graph.edge_properties[DEFINITION_EDGE_KEY][definition_edge] = definition_edge
         # Red
         self.sentence_graph.edge_properties[EDGE_COLOR_KEY][definition_edge] = [1, 0.1, 0.1, 1]
@@ -137,7 +164,7 @@ class SentenceGraph():
         return self
 
     def add_inter_sentence_edge(self, sentence1_word_vertex, sentence2_word_vertex):
-        inter_sentence_edge = self.sentence_graph.add_edge(sentence1_word_vertex, sentence2_word_vertex)
+        inter_sentence_edge = self.sentence_graph.add_edge(sentence1_word_vertex, sentence2_word_vertex, add_missing=False)
         self.sentence_graph.edge_properties[INTER_SENTENCE_EDGE_KEY][inter_sentence_edge] = inter_sentence_edge
         # Pink
         self.sentence_graph.edge_properties[EDGE_COLOR_KEY][inter_sentence_edge] = [1, 0.05, 1, 1]
@@ -228,8 +255,28 @@ class SentenceGraph():
     def get_edges(self):
         return [x for x in self.sentence_graph.edges()]
 
-    def set_definition_edge_filter(self):
-        self.sentence_graph.set_edge_filter(self.sentence_graph.edge_properties[FILTER_DEFINITION_EDGE_KEY])
+    def set_definition_edge_filter(self, inverted=False):
+        self.sentence_graph.set_edge_filter(
+            self.sentence_graph.edge_properties[FILTER_DEFINITION_EDGE_KEY], 
+            inverted=inverted)
+
+    def set_inter_sentence_edge_filter(self, inverted=False):
+        self.sentence_graph.set_edge_filter(
+            self.sentence_graph.edge_properties[FILTER_INTER_SENTENCE_EDGE_KEY], 
+            inverted=inverted)
+
+    def set_parsed_dependency_edge_filter(self, inverted=False):
+        self.sentence_edge.set_edge_filter(
+            self.sentence_graph.edge_properties[FILTER_PARSED_DEPENDENCIES_EDGE_KEY], 
+            inverted=inverted)
+
+    def set_sentence_edge_filter(self, inverted=False):
+        self.sentence_graph.set_edge_filter(
+            self.sentence_graph.edge_properties[FILTER_SENTENCE_EDGE_KEY], 
+            inverted=inverted)
+
+    def clear_filters(self):
+        self.sentence_graph.clear_filters()
 
     def get_definition_edges(self):
         return filter(lambda x: x in self.get_definition_edge_properties(), self.get_edges())
@@ -250,7 +297,6 @@ class SentenceGraph():
         return self.sentence_graph.edge_properties[DEFINITION_EDGE_KEY]
 
     def get_inter_sentence_edge_properties(self):
-        print(self.sentence_graph.edge_properties)
         return self.sentence_graph.edge_properties[INTER_SENTENCE_EDGE_KEY]
 
     def get_color_edge_properties(self):
@@ -261,9 +307,6 @@ class SentenceGraph():
 
     def get_degree_properties(self, degree_type):
         return self.sentence_graph.degree_property_map(degree_type)
-
-    def clear_filters(self):
-        self.sentence_graph.clear_filters()
 
     def get_graph(self):
         return self.sentence_graph

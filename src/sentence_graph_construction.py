@@ -10,6 +10,8 @@ from run_parsey import run_parsey
 from parse_tree_parser import parse_ascii_tree
 
 PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP = {
+    ',': ',',
+    ':': ':',
     'CC': 'Conjunction',
     'CD': 'Cardinal number',
     'DT': 'Determiner',
@@ -101,6 +103,15 @@ def build_deep_sentence_graph(
 
     return sentence_graph
 
+def _get_wiktionary_part_of_speech(parsed_part_of_speech, word):
+    try:
+        return PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parsed_part_of_speech]
+    except:
+        print(
+            "\n\nERROR: Parsey part of speech: ||%s|| for word ||%s|| could not be mapped to wiktionary part of speech!"
+            % (parsed_part_of_speech, word))
+        return None
+
 def _build_deep_sentence_graph_helper(
         sentence,
         sentence_graph,
@@ -125,16 +136,24 @@ def _build_deep_sentence_graph_helper(
             "\n\nERROR: sentence_parse_tree from parse_sentence is None for"
             " sentence:\n %s\n\n" % sentence)
         return []
-    print("DEBUG***** Finished parseing sentence into parse tree")
+    print("DEBUG***** Finished parsing sentence into parse tree")
 
     prev_word_vertex = None
     for parse_node in sentence_parse_tree.to_sentence_order():
         
         word = parse_node.word
+        part_of_speech = _get_wiktionary_part_of_speech(parse_node.part_of_speech, parse_node.word)
+        if part_of_speech is None:
+            continue
+        """
         try:
             part_of_speech = PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parse_node.part_of_speech]
         except:
+            print(
+                "\n\nERROR: Parsey part of speech: ||%s|| for word ||%s|| could not be mapped to wiktionary part of speech!"
+                % (parse_node.part_of_speech, parse_node.word))
             continue
+        """
 
         word_pos_tuple = (word, part_of_speech)
         if word_pos_tuple in word_pos_to_vertex_index_mapping:
@@ -185,6 +204,43 @@ def _build_deep_sentence_graph_helper(
             sentence_graph.add_sentence_edge(prev_word_vertex, word_vertex)
 
         prev_word_vertex = word_vertex
+
+    print("Looping over parse nodes to add parse tree dependency edges.....")
+    # Loop over parse nodes again to add parse tree edges
+    for parse_tree_edge in sentence_parse_tree.get_edges():
+        parse_node1 = parse_tree_edge[0]
+        parse_node2 = parse_tree_edge[1]
+
+        part_of_speech1 = _get_wiktionary_part_of_speech(parse_node1.part_of_speech, parse_node1.word)
+        if part_of_speech1 is None:
+            continue
+        part_of_speech2 = _get_wiktionary_part_of_speech(parse_node2.part_of_speech, parse_node2.word)
+        if part_of_speech2 is None:
+            continue
+        """
+        try:
+            part_of_speech1 = PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parse_node1.part_of_speech]
+        except:
+            print(
+                "\n\nERROR: Parsey part of speech: ||%s|| for word ||%s|| could not be mapped to wiktionary part of speech!"
+                % (parse_node1.part_of_speech, parse_node1.word))
+            continue
+        try:
+            part_of_speech2 = PARSEY_PART_OF_SPEECH_TO_WIKTIONARY_MAP[parse_node2.part_of_speech]
+        except:
+            print(
+                "\n\nERROR: Parsey part of speech: ||%s|| for word ||%s|| could not be mapped to wiktionary part of speech!"
+                % (parse_node2.part_of_speech, parse_node2.word))
+            continue
+        """
+
+        sentence_graph.add_parsed_dependency_edge_from_words(
+            parse_node1.word, 
+            part_of_speech1, 
+            parse_node2.word, 
+            part_of_speech2,
+            parse_node2.sentence_role)
+    print("Added all parse tree dependency edges!")
 
     return sentence_vertices
 

@@ -75,9 +75,9 @@ class WiktionarySpider(scrapy.Spider):
                 callback=self.wiktionary_parse,
                 errback=self.error_callback)
 
-    def error_callback(self, x):
+    def error_callback(self):
         self.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$Error callback reached")
-        self.log("Other argument is: %s" % x)
+        #self.log("Other argument is: %s" % x)
         # If the word is a noun, try retrying with the noun capitalized
         if self.part_of_speech.lower() == 'noun':
             upper_cased_word = self.word[:1].upper() + self.word[1:].lower()

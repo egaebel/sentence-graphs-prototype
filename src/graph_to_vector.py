@@ -13,14 +13,14 @@ INFINITY = np.iinfo(np.int32).max
 DUMMY_VERTEX_VALUE = "___"
 
 NODE_COST_MULTIPLIER = 1
-COST_NODE_REPLACEMENT = 2 * NODE_COST_MULTIPLIER
-COST_NODE_INSERTION = 1 * NODE_COST_MULTIPLIER
-COST_NODE_DELETION = 1 * NODE_COST_MULTIPLIER
+COST_NODE_REPLACEMENT = 1 * NODE_COST_MULTIPLIER
+COST_NODE_INSERTION = 0.25 * NODE_COST_MULTIPLIER
+COST_NODE_DELETION = 0.25 * NODE_COST_MULTIPLIER
 
 EDGE_COST_MULTIPLIER = 1
-COST_EDGE_REPLACEMENT = 2 * EDGE_COST_MULTIPLIER
-COST_EDGE_INSERTION = 1 * EDGE_COST_MULTIPLIER
-COST_EDGE_DELETION = 1 * EDGE_COST_MULTIPLIER
+COST_EDGE_REPLACEMENT = 1 * EDGE_COST_MULTIPLIER
+COST_EDGE_INSERTION = 0.25 * EDGE_COST_MULTIPLIER
+COST_EDGE_DELETION = 0.25 * EDGE_COST_MULTIPLIER
 
 # Global Variables
 word_pos_tuple_to_vertex = dict()
@@ -252,16 +252,16 @@ def sentence_graph_dissimilarity_embedding(
         prototype_sentence_graphs, 
         graph_edit_distance_func=approximate_sentence_graph_edit_distance):
     dissimilarity_vector = list()
-    #pool = Pool()
     #"""
     for prototype_sentence_graph in prototype_sentence_graphs:
         dissimilarity_vector.append(graph_edit_distance_func(sentence_graph, prototype_sentence_graph))
     #"""
     """
+    pool = Pool()
     partial_graph_edit_distance_func = partial(graph_edit_distance_func, sentence_graph2=sentence_graph)
     dissimilarity_vector = pool.map(partial_graph_edit_distance_func, prototype_sentence_graphs)
     pool.close()
-    """
+    #"""
     return dissimilarity_vector
 
 if __name__ == '__main__':
