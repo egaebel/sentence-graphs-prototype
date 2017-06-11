@@ -2,6 +2,7 @@ from sentence_graph import SentenceGraph
 from sentence_graph_io import sentence_graph_draw
 
 from multiprocessing import Manager
+import os
 import sys
 
 # Use functions from parsey-mcparseface-service
@@ -114,6 +115,16 @@ def _get_wiktionary_part_of_speech(parsed_part_of_speech, word):
             % (parsed_part_of_speech, word))
         return None
 
+def _create_failure_file(failure_directory, failure_file_name, failure_file_contents):
+    failure_file_name = failure_file_name.replace("/", "-slash-")
+    failure_file_name = failure_file_name.replace(" ", "-space-")
+    failure_file_name = failure_file_name.replace("\n", "-newline-")
+    failure_file_name = failure_file_name[:255]
+    failure_file_path = os.path.join(failure_directory, failure_file_name)
+    failure_file = open(failure_file_path, 'w')
+    failure_file.write(failure_file_contents)
+    failure_file.close()
+
 def _build_deep_sentence_graph_helper(
         sentence,
         sentence_graph,
@@ -140,6 +151,7 @@ def _build_deep_sentence_graph_helper(
         print(
             "\n\nERROR: sentence_parse_tree from parse_sentence is None for"
             " sentence:\n ||%s||\n\n" % sentence)
+        _create_failure_file("failed-part-of-speech-parse", sentence, sentence)
         return []
     print("DEBUG***** Finished parsing sentence into parse tree")
 
@@ -147,6 +159,7 @@ def _build_deep_sentence_graph_helper(
         parse_nodes = sentence_parse_tree.to_sentence_order()
     except:
         print("\n\nERROR: sentence_parse_tree from parse_sentence is invalid!!")
+        _create_failure_file("failed-part-of-speech-parse", sentence, sentence)
         return []
 
     prev_word_vertex = None
@@ -201,12 +214,11 @@ def _build_deep_sentence_graph_helper(
                 else:
                     print("\n\nERROR: definition not found for:\nword: %s\n"
                         "part of speech:%s\n\n\n" % (word, part_of_speech))
+                    failure_directory = "failed-definition-lookups"
                     failure_file_name = "%s-%s" % (word, part_of_speech)
-                    failure_file_name = failure_file_name.replace("/", "-slash-")
-                    failure_file_path = "failed-definition-lookups/%s" % failure_file_name
-                    failure_file = open(failure_file_path, 'w')
-                    failure_file.write("word: %s\npart of speech:%s\n" % (word, part_of_speech))
-                    failure_file.close()
+                    failure_file_contents = "word: %s\npart of speech:%s\n" % (word, part_of_speech)
+                    _create_failure_file(
+                        failure_directory, failure_file_name, failure_file_contents)
 
         sentence_vertices.append(word_vertex)
 
