@@ -17,7 +17,7 @@ COST_NODE_REPLACEMENT = 1 * NODE_COST_MULTIPLIER
 COST_NODE_INSERTION = 0.25 * NODE_COST_MULTIPLIER
 COST_NODE_DELETION = 0.25 * NODE_COST_MULTIPLIER
 
-EDGE_COST_MULTIPLIER = 1
+EDGE_COST_MULTIPLIER = 2
 COST_EDGE_REPLACEMENT = 1 * EDGE_COST_MULTIPLIER
 COST_EDGE_INSERTION = 0.25 * EDGE_COST_MULTIPLIER
 COST_EDGE_DELETION = 0.25 * EDGE_COST_MULTIPLIER
@@ -25,17 +25,6 @@ COST_EDGE_DELETION = 0.25 * EDGE_COST_MULTIPLIER
 # Global Variables
 word_pos_tuple_to_vertex = dict()
 vertex_adjacent_word_pos_tuples = dict()
-
-
-def astar_sentence_graph_edit_distance(graph1, graph2):
-    pass
-    # Iterate over each word-pos
-    #   # Iterate over each edge 
-    #       # create neighbor graph
-    #       # check cost of graph
-
-def _graph_cost_heuristic(graph1, graph2):
-    pass
 
 def _sentence_graph_vertex_cost(
         sentence_graph1_word_pos_tuples, 
@@ -194,8 +183,35 @@ def approximate_graph_edit_distance(
     sentence_graph1_copy = sentence_graph1.copy()
     sentence_graph2_copy = sentence_graph2.copy()
 
-    sentence_graph1_word_pos_tuples = sorted(sentence_graph1_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
-    sentence_graph2_word_pos_tuples = sorted(sentence_graph2_copy.get_word_pos_tuples(), key=lambda x: x[0] + x[1])
+    def word_pos_sort_key(word_pos_tuple):
+        return word_pos_tuple[0] + word_pos_tuple[1]
+
+    # Perform the following manipulations:
+    # X = sentence_graph1_word_pos_tuples
+    # Y = sentence_graph2_word_pos_tuples
+    # Z = X intersect Y
+    # X = sort(Z) + sort(X - Z)
+    # Y = sort(Z) + sort(Y - Z)
+    sentence_graph1_word_pos_tuples_set = set(sentence_graph1_copy.get_word_pos_tuples())
+    sentence_graph2_word_pos_tuples_set = set(sentence_graph2_copy.get_word_pos_tuples())
+
+    shared_word_pos_tuples_set =\
+        sentence_graph1_word_pos_tuples_set.intersection(sentence_graph2_word_pos_tuples_set)
+    shared_word_pos_tuples_list = sorted(list(shared_word_pos_tuples_set), key=word_pos_sort_key)
+
+    unshared_sentence_graph1_word_pos_tuples_set =\
+        sentence_graph1_word_pos_tuples_set.difference(shared_word_pos_tuples_set)
+    unshared_sentence_graph2_word_pos_tuples_set =\
+        sentence_graph2_word_pos_tuples_set.difference(shared_word_pos_tuples_set)
+
+    sentence_graph1_word_pos_tuples = (shared_word_pos_tuples_list
+        + sorted(
+            list(unshared_sentence_graph1_word_pos_tuples_set), 
+            key=word_pos_sort_key))
+    sentence_graph2_word_pos_tuples = (shared_word_pos_tuples_list
+        + sorted(
+            list(unshared_sentence_graph2_word_pos_tuples_set), 
+            key=word_pos_sort_key))
 
     N_M = sentence_graph1_copy.get_num_vertices() + sentence_graph2_copy.get_num_vertices()
 
@@ -254,7 +270,10 @@ def sentence_graph_dissimilarity_embedding(
     dissimilarity_vector = list()
     #"""
     for prototype_sentence_graph in prototype_sentence_graphs:
-        dissimilarity_vector.append(graph_edit_distance_func(sentence_graph, prototype_sentence_graph))
+        dissimilarity_vector.append(
+            graph_edit_distance_func(
+                sentence_graph, 
+                prototype_sentence_graph))
     #"""
     """
     pool = Pool()
