@@ -33,8 +33,8 @@ import numpy as np
 import sys
 
 # Corex imports
-sys.path.insert(1, "../../corex/CorEx")
-from corex import Corex
+#sys.path.insert(1, "../../corex/CorEx")
+#from corex import Corex
 
 # STS Dataset imports
 sys.path.insert(1, "../../sentence-similarity-datasets/sts-2014")
@@ -55,6 +55,7 @@ BBC_ARTICLE = """The British Broadcasting Corporation (BBC) is a British public 
 ###########################------Multiprocessing Manager Definition-----###########################
 manager = Manager()
 
+parsey_lock = manager.Lock()
 parse_wiktionary_lock = manager.Lock()
 shared_sentence_graph_count = manager.Value('L', 0)
 shared_sentence_graphs_list = manager.list()
@@ -148,6 +149,7 @@ def combine_sentence_graphs(sentence_graphs, directed=True):
     return combined_sentence_graph
 
 def sentence_graph_creation_func(sentence):
+    global parsey_lock
     global parse_wiktionary_lock
     global shared_sentence_graphs_list
     global shared_sentence_graph_count
@@ -176,7 +178,8 @@ def sentence_graph_creation_func(sentence):
                 WiktionaryClient(parse_wiktionary_lock), 
                 directed=directed, 
                 depth=depth,
-                use_definition_cache=use_definition_cache)
+                use_definition_cache=use_definition_cache,
+                parsey_lock=parsey_lock)
         loaded_from_file = False
 
     shared_sentence_graphs_list.append(sentence_graph)
@@ -469,6 +472,9 @@ def sick_dataset_test():
     sick_root_path = "../../sentence-similarity-datasets/sick/sick2014"
     sick_dataset = load_sick_dataset(sick_root_path, "SICK_trial.txt")
     result_tuples = pool.map(pairwise_sentence_similarity_on_sick_item, sick_dataset)
+    #result_tuples = list()
+    #for sick_item in sick_dataset:
+    #    result_tuples.append(pairwise_sentence_similarity_on_sick_item(sick_item))
 
     print("Finished calculating distances!")
     print("Drawing sentence graphs for debugging.....")

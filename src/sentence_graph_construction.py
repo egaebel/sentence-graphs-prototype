@@ -83,7 +83,8 @@ def build_deep_sentence_graph(
         parse_sentence=run_parsey_mcparseface,
         directed=False,
         depth=2,
-        use_definition_cache=True):
+        use_definition_cache=True,
+        parsey_lock=None):
     sentence_graph = SentenceGraph(sentence=sentence, directed=directed)
     word_pos_to_vertex_index_mapping = dict()
 
@@ -95,7 +96,8 @@ def build_deep_sentence_graph(
         parse_sentence,
         directed,
         depth,
-        use_definition_cache)
+        use_definition_cache,
+        parsey_lock)
 
     for word_vertex in first_sentence_vertices:
         # RED
@@ -120,7 +122,8 @@ def _build_deep_sentence_graph_helper(
         parse_sentence,
         directed,
         depth,
-        use_definition_cache):
+        use_definition_cache,
+        parsey_lock):
     if depth is not None:
         if depth == 0:
             return []
@@ -130,17 +133,24 @@ def _build_deep_sentence_graph_helper(
     sentence = sentence.replace(".", "").lower().strip()
     sentence_vertices = []
     # Parse the sentence to obtain parts of speech tagging
+    parsey_lock.acquire()
     sentence_parse_tree = parse_sentence(sentence)
+    parsey_lock.release()
     if sentence_parse_tree is None:
         print(
             "\n\nERROR: sentence_parse_tree from parse_sentence is None for"
-            " sentence:\n %s\n\n" % sentence)
+            " sentence:\n ||%s||\n\n" % sentence)
         return []
     print("DEBUG***** Finished parsing sentence into parse tree")
 
+    try:
+        parse_nodes = sentence_parse_tree.to_sentence_order()
+    except:
+        print("\n\nERROR: sentence_parse_tree from parse_sentence is invalid!!")
+        return []
+
     prev_word_vertex = None
-    for parse_node in sentence_parse_tree.to_sentence_order():
-        
+    for parse_node in parse_nodes:
         word = parse_node.word
         part_of_speech = _get_wiktionary_part_of_speech(parse_node.part_of_speech, parse_node.word)
         if part_of_speech is None:
@@ -179,7 +189,8 @@ def _build_deep_sentence_graph_helper(
                         parse_sentence,
                         directed,
                         depth,
-                        use_definition_cache)
+                        use_definition_cache,
+                        parsey_lock)
 
                     # Add edges from the word_vertex to all definition vertices and set 
                     # the definition edge property on each edge
