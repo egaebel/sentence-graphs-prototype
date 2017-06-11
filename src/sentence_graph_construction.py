@@ -144,9 +144,9 @@ def _build_deep_sentence_graph_helper(
     sentence = sentence.replace(".", "").lower().strip()
     sentence_vertices = []
     # Parse the sentence to obtain parts of speech tagging
-    parsey_lock.acquire()
+    #parsey_lock.acquire()
     sentence_parse_tree = parse_sentence(sentence)
-    parsey_lock.release()
+    #parsey_lock.release()
     if sentence_parse_tree is None:
         print(
             "\n\nERROR: sentence_parse_tree from parse_sentence is None for"
